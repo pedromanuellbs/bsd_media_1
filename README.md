@@ -1,5 +1,10 @@
 # bsd_media
 
+<p align="center">
+  <img src="assets/images/logo-bsd-media.png" alt="BSD Media Logo" width="200"/>
+</p>
+
+
 A new Flutter project.
 
 ## Getting Started
