@@ -1,10 +1,15 @@
 # bsd_media
 
 <p align="center">
-  <img src="assets/logo-bsd-media.png" alt="BSD Media Logo" width="200"/>
-  &nbsp;&nbsp;&nbsp;
-  <img src="assets/logo-blp.png" alt="BLP Logo" width="200"/>
+  <a href="https://instagram.com/bsd_media" target="_blank">
+    <img src="assets/logo-bsd-media.png" alt="BSD Media Logo" width="200"/>
+  </a>
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <a href="https://instagram.com/blp.projects" target="_blank">
+    <img src="assets/logo-blp.png" alt="BLP Projects Logo" width="200"/>
+  </a>
 </p>
+
 
 
 
