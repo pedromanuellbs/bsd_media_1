@@ -1,7 +1,7 @@
 # bsd_media
 
 <p align="center">
-  <img src="assets/images/logo-bsd-media.png" alt="BSD Media Logo" width="200"/>
+  <img src="assets/logo-bsd-media.png" alt="BSD Media Logo" width="200"/>
 </p>
 
 
