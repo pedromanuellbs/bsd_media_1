@@ -2,7 +2,7 @@
 
 <p align="center">
   <img src="assets/logo-bsd-media.png" alt="BSD Media Logo" width="200" style="margin-right: 20px;"/>
-  <img src="assets/logo-blp.png" alt="BSD Media Logo" width="200" style="margin-right: 20px;"/>
+  <img src="assets/logo-blp.png" alt="BSD Media Logo" width="150" style="margin-right: 20px;"/>
 </p>
 
 
