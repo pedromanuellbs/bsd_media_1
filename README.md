@@ -1,4 +1,4 @@
-# bsd_media
+# Photo Redeem & Payment App for BSD Media Photography Community and Clients
 
 <p align="center">
     <img src="assets/logo-bsd-media.png" alt="BSD Media Logo" width="200"/>
@@ -12,7 +12,6 @@
 
 its for my final task in uni that using face recognition app
 
-## Getting Started
 
 any question would be appreciated, thanks.
 
