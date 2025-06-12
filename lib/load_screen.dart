@@ -1,6 +1,6 @@
 // load_screen.dart
 import 'package:flutter/material.dart';
-import 'screens/auth/sign_in.dart';
+import 'screens/auth/sign_in.dart';  // pastikan path-nya benar
 
 class LoadScreen extends StatefulWidget {
   const LoadScreen({super.key});
@@ -27,7 +27,7 @@ class _LoadScreenState extends State<LoadScreen>
 
     Future.delayed(const Duration(seconds: 3), () {
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => SignInPage2()),
+        MaterialPageRoute(builder: (_) => const SignInPage()),
       );
     });
   }

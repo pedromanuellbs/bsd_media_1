@@ -1,9 +1,10 @@
-// sign_in.dart
+// screens/auth/sign_in.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../home/home.dart'; // import HomePage dari file terpisah
+import '../home/home.dart';
+import 'sign_up.dart';
 
-/// Entry point widget so tests and runApp work without errors.
+/// Entry point widget
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
@@ -12,15 +13,15 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'BSD Media',
       theme: ThemeData(useMaterial3: true),
-      home: const SignInPage2(),
+      home: const SignInPage(),
       debugShowCheckedModeBanner: false,
     );
   }
 }
 
 /// Sign-in page with responsive layout and Material 3 text styles.
-class SignInPage2 extends StatelessWidget {
-  const SignInPage2({Key? key}) : super(key: key);
+class SignInPage extends StatelessWidget {
+  const SignInPage({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -58,7 +59,6 @@ class _Logo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool isSmallScreen = MediaQuery.of(context).size.width < 600;
-
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -75,72 +75,35 @@ class _FormContent extends StatefulWidget {
   const _FormContent({Key? key}) : super(key: key);
 
   @override
-  State<_FormContent> createState() => __FormContentState();
+  State<_FormContent> createState() => _FormContentState();
 }
 
-class __FormContentState extends State<_FormContent> {
+class _FormContentState extends State<_FormContent> {
   bool _isPasswordVisible = false;
   bool _rememberMe = false;
-  bool _showSignUp = false;
   final _loginFormKey = GlobalKey<FormState>();
-  final _signUpFormKey = GlobalKey<FormState>();
-
-  // Controllers for sign-up fields (optional)
-  final _usernameController = TextEditingController();
-  final _emailController   = TextEditingController();
-  final _passwordController = TextEditingController();
-  final _confirmController  = TextEditingController();
-
-  @override
-  void dispose() {
-    _usernameController.dispose();
-    _emailController.dispose();
-    _passwordController.dispose();
-    _confirmController.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedCrossFade(
-      firstChild: _buildLoginForm(context),
-      secondChild: _buildSignUpForm(context),
-      crossFadeState: _showSignUp
-          ? CrossFadeState.showSecond
-          : CrossFadeState.showFirst,
-      duration: const Duration(milliseconds: 300),
-      layoutBuilder:
-          (topChild, topKey, bottomChild, bottomKey) => Stack(
-        alignment: Alignment.center,
-        children: [
-          Positioned(key: bottomKey, child: bottomChild),
-          Positioned(key: topKey, child: topChild),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLoginForm(BuildContext context) {
     return ContentBox(
       child: Form(
         key: _loginFormKey,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Email field
             TextFormField(
-              validator: (v) =>
-                  v == null || v.isEmpty ? 'Please enter your email' : null,
-              decoration: const InputDecoration(
-                labelText: 'Email',
-                hintText: 'Enter your email',
-                prefixIcon: Icon(Icons.email_outlined),
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 16),
+  validator: (v) => v == null || v.isEmpty
+      ? 'Please enter your username'
+      : null,
+  decoration: const InputDecoration(
+    labelText: 'Username',
+    hintText: 'Enter your username',
+    prefixIcon: Icon(Icons.person_outline),
+    border: OutlineInputBorder(),
+  ),
+),
 
-            // Password field
+            const SizedBox(height: 16),
             TextFormField(
               validator: (v) {
                 if (v == null || v.isEmpty) {
@@ -167,8 +130,6 @@ class __FormContentState extends State<_FormContent> {
               ),
             ),
             const SizedBox(height: 16),
-
-            // Remember-me checkbox
             CheckboxListTile(
               value: _rememberMe,
               onChanged: (v) => setState(() => _rememberMe = v ?? false),
@@ -178,132 +139,37 @@ class __FormContentState extends State<_FormContent> {
               contentPadding: EdgeInsets.zero,
             ),
             const SizedBox(height: 16),
-
-            // Sign Up button
             SizedBox(
               width: double.infinity,
-              child: OutlinedButton(
-                onPressed: () =>
-                    setState(() => _showSignUp = true), // switch to sign-up
-                child: const Text('Sign Up'),
+              child: ElevatedButton(
+                onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const SignUpPage())),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.all(12),
+                ),
+                child: const Text(
+                  'Sign Up',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
               ),
             ),
             const SizedBox(height: 8),
-
-            // Sign in button
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: () {
                   if (_loginFormKey.currentState?.validate() ?? false) {
                     Navigator.of(context).push(
-                      MaterialPageRoute(
-                          builder: (_) => const HomePage()),
+                      MaterialPageRoute(builder: (_) => const HomePage()),
                     );
                   }
                 },
-                child: const Padding(
-                  padding: EdgeInsets.all(12),
-                  child: Text('Sign In',
-                      style:
-                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.all(12),
                 ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSignUpForm(BuildContext context) {
-    return ContentBox(
-      child: Form(
-        key: _signUpFormKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Username
-            TextFormField(
-              controller: _usernameController,
-              validator: (v) =>
-                  v == null || v.isEmpty ? 'Please enter a username' : null,
-              decoration: const InputDecoration(
-                labelText: 'Username',
-                prefixIcon: Icon(Icons.person_outline),
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Email
-            TextFormField(
-              controller: _emailController,
-              validator: (v) =>
-                  v == null || v.isEmpty ? 'Please enter your email' : null,
-              decoration: const InputDecoration(
-                labelText: 'Email',
-                prefixIcon: Icon(Icons.email_outlined),
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Password
-            TextFormField(
-              controller: _passwordController,
-              obscureText: true,
-              validator: (v) =>
-                  v == null || v.length < 6 ? 'Min 6 characters' : null,
-              decoration: const InputDecoration(
-                labelText: 'Password',
-                prefixIcon: Icon(Icons.lock_outline_rounded),
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Confirm Password
-            TextFormField(
-              controller: _confirmController,
-              obscureText: true,
-              validator: (v) => v != _passwordController.text
-                  ? 'Passwords do not match'
-                  : null,
-              decoration: const InputDecoration(
-                labelText: 'Confirm Password',
-                prefixIcon: Icon(Icons.lock_outline_rounded),
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Back to Sign In
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton(
-                onPressed: () =>
-                    setState(() => _showSignUp = false), // back to login
-                child: const Text('Back to Sign In'),
-              ),
-            ),
-            const SizedBox(height: 8),
-
-            // Register button
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () {
-                  if (_signUpFormKey.currentState?.validate() ?? false) {
-                    // handle registration logic here...
-                    setState(() => _showSignUp = false); // go back to login
-                  }
-                },
-                child: const Padding(
-                  padding: EdgeInsets.all(12),
-                  child: Text('Register',
-                      style:
-                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                child: const Text(
+                  'Sign In',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
               ),
             ),
@@ -314,10 +180,9 @@ class __FormContentState extends State<_FormContent> {
   }
 }
 
-/// Box content wrapper with padding, radius, and subtle shadow.
 class ContentBox extends StatelessWidget {
   final Widget child;
-  const ContentBox({super.key, required this.child});
+  const ContentBox({Key? key, required this.child}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
