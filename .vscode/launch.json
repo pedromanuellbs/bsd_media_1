@@ -1,0 +1,18 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Train LBPH",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/face_ai/train.py"
+    },
+    {
+      "name": "Recognize Face",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/face_ai/recognize.py",
+      "args": ["${workspaceFolder}/face_ai/data/train/user1/img1.jpg"]
+    }
+  ]
+}

@@ -4,6 +4,16 @@ import 'package:flutter/services.dart';
 import '../home/home.dart';
 import 'sign_in.dart';
 
+import 'package:camera/camera.dart';
+import 'package:http/http.dart' as http;
+import 'package:path/path.dart' as path;
+import 'package:path_provider/path_provider.dart';
+import 'dart:convert';
+import 'dart:io';
+import 'package:bsd_media/face_ai/face_capture_page.dart';
+
+
+
 class SignUpPage extends StatefulWidget {
   const SignUpPage({Key? key}) : super(key: key);
 
@@ -120,21 +130,73 @@ class _SignUpPageState extends State<SignUpPage> {
 
                 // Face Recognition button (placeholder)
                 SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      // TODO: implement face recognition logic here
-                    },
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.all(12),
-                    ),
-                    child: const Text(
-                      'Face Recognition',
-                      style:
-                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ),
+  width: double.infinity,
+  child: ElevatedButton(
+    onPressed: () async {
+      try {
+        final cameras = await availableCameras();
+        final camera = cameras.first;
+
+        final result = await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => FaceCapturePage(camera: camera),
+          ),
+        );
+
+        if (result != null) {
+          final filePath = result as String;
+
+          final request = http.MultipartRequest(
+            'POST',
+           Uri.parse('http://192.168.100.13:5000/recognize')
+          );
+          request.files.add(await http.MultipartFile.fromPath('face', filePath));
+
+          final response = await request.send();
+          final respStr = await response.stream.bytesToString();
+          final jsonResponse = json.decode(respStr);
+
+          if (jsonResponse['results'].isNotEmpty) {
+            final user = jsonResponse['results'][0]['user'];
+            final confidence = jsonResponse['results'][0]['confidence'];
+
+            showDialog(
+              context: context,
+              builder: (_) => AlertDialog(
+                title: const Text('Wajah Dikenali'),
+                content: Text('User: $user\nConfidence: ${confidence.toStringAsFixed(2)}'),
+                actions: [
+                  TextButton(
+                    child: const Text('OK'),
+                    onPressed: () => Navigator.pop(context),
+                  )
+                ],
+              ),
+            );
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Tidak ada wajah terdeteksi.')),
+            );
+          }
+        }
+      } catch (e) {
+        print('❌ Error Face Recognition: $e');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Terjadi kesalahan saat face recognition')),
+        );
+      }
+    },
+    style: ElevatedButton.styleFrom(
+      padding: const EdgeInsets.all(12),
+    ),
+    child: const Text(
+      'Face Recognition',
+      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+    ),
+  ),
+),
+
                 const SizedBox(height: 8),
 
                 // Register button

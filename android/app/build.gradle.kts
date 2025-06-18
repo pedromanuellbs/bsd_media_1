@@ -6,6 +6,10 @@ plugins {
 }
 
 android {
+
+    compileSdk = 33
+    ndkVersion = "27.0.12077973" // Tambahkan ini
+
     namespace = "com.example.bsd_media"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
