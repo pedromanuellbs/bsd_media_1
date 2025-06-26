@@ -1,3 +1,16 @@
+// 1. Tambahkan ini di paling atas:
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        // Versi bisa disesuaikan, tapi pastikan ini ada:
+        classpath("com.google.gms:google-services:4.3.15")
+    }
+}
+
+// 2. Kemudian sisanya tetap seperti semula:
 allprojects {
     repositories {
         google()

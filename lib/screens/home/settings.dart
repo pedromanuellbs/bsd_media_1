@@ -69,7 +69,7 @@ class SettingsPage2 extends StatelessWidget {
             // Tile “Cara Kerja” pakai icon user-cog dari Line Awesome
             _CustomListTile(
               title: 'Cara Kerja',
-              icon: LineAwesomeIcons.user_cog,
+              icon: LineAwesomeIcons.user_cog_solid,
               onTap: () {
                 // aksi jika perlu
               },
@@ -78,7 +78,7 @@ class SettingsPage2 extends StatelessWidget {
             const Divider(height: 32),
             const _CustomListTile(
               title: 'Bahasa',
-              icon: LineAwesomeIcons.language,
+              icon: LineAwesomeIcons.language_solid,
             ),
             const _CustomListTile(
               title: 'Bantuan',

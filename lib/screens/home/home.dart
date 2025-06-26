@@ -37,6 +37,7 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   int _selectedIndex = 0;
+  bool _showEmptyFollowing = false; // flag for empty following state
   late final PageController _pageController;
   late final List<VideoPlayerController> _controllers;
   List<_ShortData> _shorts = [];
@@ -54,15 +55,15 @@ class _HomePageState extends State<HomePage> {
     Map<String, dynamic> manifestMap = {};
     try {
       manifestMap = json.decode(
-          await DefaultAssetBundle.of(context).loadString('AssetManifest.json')
-      ) as Map<String, dynamic>;
+          await DefaultAssetBundle.of(context).loadString('AssetManifest.json'))
+          as Map<String, dynamic>;
     } catch (_) {}
     final videoPaths = manifestMap.keys
         .where((k) => k.startsWith('assets/vids/') && k.endsWith('.mp4'))
         .toList()..sort();
 
     _shorts = videoPaths.map((path) {
-      final name = path.split('/').last.replaceAll('.mp4','');
+      final name = path.split('/').last.replaceAll('.mp4', '');
       return _ShortData(
         assetPath: path,
         channelName: 'Channel $name',
@@ -102,38 +103,49 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       extendBodyBehindAppBar: isHome,
       appBar: isHome
-          // Custom transparent AppBar only on Home
           ? PreferredSize(
-              preferredSize: const Size.fromHeight(80),
+              preferredSize: const Size.fromHeight(130),
               child: SafeArea(
                 bottom: false,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const SizedBox(width: 28),
                       Expanded(
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Text('Mengikuti',
-                                style: TextStyle(color: Colors.white70, fontSize: 16)),
+                            GestureDetector(
+                              onTap: () => setState(() => _showEmptyFollowing = true),
+                              child: const Text(
+                                'Mengikuti',
+                                style: TextStyle(color: Colors.white70, fontSize: 16),
+                              ),
+                            ),
                             const SizedBox(width: 24),
-                            Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Text('Feed',
+                            GestureDetector(
+                              onTap: () => setState(() => _showEmptyFollowing = false),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Text(
+                                    'Feed',
                                     style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold)),
-                                Container(
-                                  margin: const EdgeInsets.only(top: 4),
-                                  height: 2,
-                                  width: 24,
-                                  color: Colors.white,
-                                )
-                              ],
+                                      color: Colors.white,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  Container(
+                                    margin: const EdgeInsets.only(top: 4),
+                                    height: 2,
+                                    width: 24,
+                                    color: Colors.white,
+                                  ),
+                                ],
+                              ),
                             ),
                           ],
                         ),
@@ -143,13 +155,11 @@ class _HomePageState extends State<HomePage> {
                         children: [
                           const Icon(Icons.send, color: Colors.white, size: 28),
                           const SizedBox(height: 4),
-                          const Text('Kirim ke Wajah',
-                              style: TextStyle(color: Colors.white70, fontSize: 12)),
+                          const Text('Kirim ke Wajah', style: TextStyle(color: Colors.white70, fontSize: 12)),
                           const SizedBox(height: 16),
                           const Icon(Icons.camera_alt, color: Colors.white, size: 28),
                           const SizedBox(height: 4),
-                          const Text('FotoTree',
-                              style: TextStyle(color: Colors.white70, fontSize: 12)),
+                          const Text('Cari Foto Kamu', style: TextStyle(color: Colors.white70, fontSize: 12)),
                         ],
                       ),
                     ],
@@ -157,16 +167,28 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
             )
-          // Regular AppBar on other pages
           : AppBar(
               title: _navBarItems[_selectedIndex].title,
             ),
-      body: isHome ? _buildShortsFeed() : _buildPlaceholder(),
+      body: isHome
+          ? (_showEmptyFollowing
+              ? const Center(
+                  child: Text(
+                    'Kamu belum follow fotografer siapapun.',
+                    style: TextStyle(color: Color.fromARGB(255, 0, 0, 0), fontSize: 18),
+                    textAlign: TextAlign.center,
+                  ),
+                )
+              : _buildShortsFeed())
+          : _buildPlaceholder(),
       bottomNavigationBar: SalomonBottomBar(
         currentIndex: _selectedIndex,
         selectedItemColor: const Color(0xff6200ee),
         unselectedItemColor: const Color(0xff757575),
-        onTap: (i) => setState(() => _selectedIndex = i),
+        onTap: (i) => setState(() {
+          _selectedIndex = i;
+          if (i != 0) _showEmptyFollowing = false;
+        }),
         items: _navBarItems,
       ),
     );

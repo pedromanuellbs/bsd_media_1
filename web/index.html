@@ -31,6 +31,27 @@
 
   <title>bsd_media</title>
   <link rel="manifest" href="manifest.json">
+
+  <!-- Firebase JS SDK -->
+  <script src="https://www.gstatic.com/firebasejs/11.4.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.4.0/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.4.0/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.4.0/firebase-storage.js"></script>
+
+  <script>
+    // Konfigurasi Web Firebase (ambil dari Console → Project Settings → SDK setup → Config)
+    const firebaseConfig = {
+      apiKey: "AIzaSyD-0C4SRIR60ZxC-9Hl6z2IhfInT-yWj_Q",
+      authDomain: "db-ta-bsd-media.firebaseapp.com",
+      projectId: "db-ta-bsd-media",
+      storageBucket: "db-ta-bsd-media.firebasestorage.app",
+      messagingSenderId: "869680622559",
+      appId: "1:869680622559:web:YOUR_WEB_APP_ID",
+      measurementId: "G-MEASUREMENT_ID" // optional
+    };
+    // Inisialisasi Firebase
+    firebase.initializeApp(firebaseConfig);
+  </script>
 </head>
 <body>
   <script src="flutter_bootstrap.js" async></script>

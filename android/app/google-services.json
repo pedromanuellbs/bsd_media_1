@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "869680622559",
+    "project_id": "db-ta-bsd-media",
+    "storage_bucket": "db-ta-bsd-media.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:869680622559:android:cc94134dd493081685726a",
+        "android_client_info": {
+          "package_name": "com.bsdmedia.dbmedia"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD-0C4SRIR60ZxC-9Hl6z2IhfInT-yWj_Q"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
