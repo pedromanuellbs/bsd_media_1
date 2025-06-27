@@ -8,38 +8,70 @@ import 'sign_up.dart';
 
 class SignInPage extends StatefulWidget {
   const SignInPage({Key? key}) : super(key: key);
-
   @override
   State<SignInPage> createState() => _SignInPageState();
 }
 
 class _SignInPageState extends State<SignInPage> {
-  final _emailCtrl = TextEditingController();
-  final _pwCtrl = TextEditingController();
-  bool _pwVisible = false;
-  bool _loading = false;
-  bool _isPhotographer = false; // <-- Tambah state
+  final _idCtrl    = TextEditingController(); // Username Klien / Username Fotografer
+  final _pwCtrl    = TextEditingController();
+  bool _pwVisible  = false;
+  bool _loading    = false;
+  bool _isPhotographer = false;
 
   @override
   void dispose() {
-    _emailCtrl.dispose();
+    _idCtrl.dispose();
     _pwCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _signIn() async {
-    if (_emailCtrl.text.isEmpty || _pwCtrl.text.isEmpty) return;
-    setState(() => _loading = true);
+    final username = _idCtrl.text.trim();
+    final password = _pwCtrl.text.trim();
+    if (username.isEmpty || password.isEmpty) return;
 
+    setState(() => _loading = true);
     try {
+      // 1) Tentukan koleksi & role yang dicari
+      final roleToFind = _isPhotographer ? 'photographer' : 'client';
+
+      // 2) Query Firestore by username & role
+      final q = await FirebaseFirestore.instance
+          .collection('users')
+          .where('role', isEqualTo: roleToFind)
+          .where('username', isEqualTo: username)
+          .limit(1)
+          .get();
+
+      if (q.docs.isEmpty) {
+        throw _isPhotographer
+            ? 'Username Fotografer tidak ditemukan'
+            : 'Username Klien tidak ditemukan';
+      }
+
+      // 3) Ambil email dari dokumen
+      final data    = q.docs.first.data();
+      final emailToUse = data['email'] as String;
+
+      // 4) Sign in with email & password
       final cred = await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: _emailCtrl.text.trim(),
-        password: _pwCtrl.text.trim(),
+        email: emailToUse,
+        password: password,
       );
 
-      // Jika photographer, bisa tambah pengecekan role di Firestore jika dibutuhkan
-      // Tapi sesuai permintaan sekarang, cukup sign in saja.
+      // 5) Verifikasi role di Firestore jika perlu
+      final snap = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(cred.user!.uid)
+          .get();
+      final actualRole = snap.data()?['role'] as String? ?? '';
+      if (actualRole != roleToFind) {
+        await FirebaseAuth.instance.signOut();
+        throw 'Akun ini bukan ${roleToFind == 'photographer' ? 'Fotografer' : 'Klien'}';
+      }
 
+      // 6) Berhasil → ke HomePage
       if (mounted) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (_) => const HomePage()),
@@ -61,7 +93,10 @@ class _SignInPageState extends State<SignInPage> {
         title: const Text('Error'),
         content: Text(msg),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK'))
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          )
         ],
       ),
     );
@@ -82,22 +117,26 @@ class _SignInPageState extends State<SignInPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Username (Klien/Fotografer)
+              // Username field
               TextFormField(
-                controller: _emailCtrl,
+                controller: _idCtrl,
                 decoration: InputDecoration(
-                  labelText: _isPhotographer ? 'Username Fotografer' : 'Username Klien',
-                  prefixIcon: const Icon(Icons.email_outlined),
+                  labelText: _isPhotographer
+                      ? 'Username Fotografer'
+                      : 'Username Klien',
+                  prefixIcon: const Icon(Icons.person_outline),
                 ),
               ),
               const SizedBox(height: 12),
 
-              // Password (Klien/Fotografer)
+              // Password field
               TextFormField(
                 controller: _pwCtrl,
                 obscureText: !_pwVisible,
                 decoration: InputDecoration(
-                  labelText: _isPhotographer ? 'Password Fotografer' : 'Password Klien',
+                  labelText: _isPhotographer
+                      ? 'Password Fotografer'
+                      : 'Password Klien',
                   prefixIcon: const Icon(Icons.lock_outline),
                   suffixIcon: IconButton(
                     icon: Icon(
@@ -109,51 +148,27 @@ class _SignInPageState extends State<SignInPage> {
               ),
               const SizedBox(height: 8),
 
-              // Toggle link: di atas tombol Sign In
-              if (!_isPhotographer) // Kalau belum photographer
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextButton(
-                    onPressed: () => setState(() => _isPhotographer = true),
-                    child: const Text(
-                      'Kamu Fotografer?',
-                      style: TextStyle(
-                        color: Colors.deepPurple,
-                        fontSize: 14,
-                        decoration: TextDecoration.underline,
-                      ),
-                    ),
-                    style: TextButton.styleFrom(
-                      padding: EdgeInsets.zero,
-                      minimumSize: const Size(0, 0),
+              // Toggle link (Klien <-> Fotografer)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  onPressed: () => setState(() => _isPhotographer = !_isPhotographer),
+                  child: Text(
+                    _isPhotographer
+                        ? 'Kamu Klien?'
+                        : 'Kamu Fotografer?',
+                    style: const TextStyle(
+                      color: Colors.deepPurple,
+                      decoration: TextDecoration.underline,
                     ),
                   ),
+                  style: TextButton.styleFrom(padding: EdgeInsets.zero),
                 ),
-
-              // Toggle link: Kembali ke klien
-              if (_isPhotographer) // Jika sudah photographer, ganti link
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextButton(
-                    onPressed: () => setState(() => _isPhotographer = false),
-                    child: const Text(
-                      'Kamu Bukan Fotografer?',
-                      style: TextStyle(
-                        color: Colors.deepPurple,
-                        fontSize: 14,
-                        decoration: TextDecoration.underline,
-                      ),
-                    ),
-                    style: TextButton.styleFrom(
-                      padding: EdgeInsets.zero,
-                      minimumSize: const Size(0, 0),
-                    ),
-                  ),
-                ),
+              ),
 
               const SizedBox(height: 8),
 
-              // Tombol Sign In
+              // Sign In button
               ElevatedButton(
                 onPressed: _loading ? null : _signIn,
                 style: ElevatedButton.styleFrom(
@@ -163,15 +178,15 @@ class _SignInPageState extends State<SignInPage> {
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(24),
                   ),
-                  textStyle: const TextStyle(fontSize: 16),
                 ),
                 child: _loading
                     ? const CircularProgressIndicator()
                     : const Text('Sign In'),
               ),
+
               const SizedBox(height: 12),
 
-              // Tombol Sign Up (untuk daftar user baru)
+              // Sign Up link
               TextButton(
                 onPressed: () => Navigator.push(
                   context,

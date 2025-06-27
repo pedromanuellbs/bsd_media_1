@@ -5,7 +5,9 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:salomon_bottom_bar/salomon_bottom_bar.dart';
 import 'package:video_player/video_player.dart';
-
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../fg_log/create_fg.dart'; // sesuaikan path folder f_glog
 import 'settings.dart';
 
 class _ShortData {
@@ -21,14 +23,6 @@ class _ShortData {
   });
 }
 
-final _navBarItems = <SalomonBottomBarItem>[
-  SalomonBottomBarItem(icon: const Icon(Icons.home), title: const Text("Home"), selectedColor: Colors.purple),
-  SalomonBottomBarItem(icon: const Icon(Icons.favorite_border), title: const Text("Saved"), selectedColor: Colors.pink),
-  SalomonBottomBarItem(icon: const Icon(Icons.search), title: const Text("Search"), selectedColor: Colors.orange),
-  SalomonBottomBarItem(icon: const Icon(Icons.person), title: const Text("Profile"), selectedColor: Colors.teal),
-  SalomonBottomBarItem(icon: const Icon(Icons.settings), title: const Text("Settings"), selectedColor: Colors.grey),
-];
-
 class HomePage extends StatefulWidget {
   const HomePage({Key? key}) : super(key: key);
   @override
@@ -37,7 +31,8 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   int _selectedIndex = 0;
-  bool _showEmptyFollowing = false; // flag for empty following state
+  bool _showEmptyFollowing = false;
+  bool _isPhotographer = false;
   late final PageController _pageController;
   late final List<VideoPlayerController> _controllers;
   List<_ShortData> _shorts = [];
@@ -48,7 +43,22 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
     _pageController = PageController();
+    _fetchUserRole();
     _loadShortsAndInit();
+  }
+
+  Future<void> _fetchUserRole() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid != null) {
+      final snap = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .get();
+      final role = snap.data()?['role'] as String?;
+      if (role == 'photographer' && mounted) {
+        setState(() => _isPhotographer = true);
+      }
+    }
   }
 
   Future<void> _loadShortsAndInit() async {
@@ -60,7 +70,8 @@ class _HomePageState extends State<HomePage> {
     } catch (_) {}
     final videoPaths = manifestMap.keys
         .where((k) => k.startsWith('assets/vids/') && k.endsWith('.mp4'))
-        .toList()..sort();
+        .toList()
+      ..sort();
 
     _shorts = videoPaths.map((path) {
       final name = path.split('/').last.replaceAll('.mp4', '');
@@ -103,115 +114,150 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       extendBodyBehindAppBar: isHome,
       appBar: isHome
-          ? PreferredSize(
-              preferredSize: const Size.fromHeight(130),
-              child: SafeArea(
-                bottom: false,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(width: 28),
-                      Expanded(
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            GestureDetector(
-                              onTap: () => setState(() => _showEmptyFollowing = true),
-                              child: const Text(
-                                'Mengikuti',
-                                style: TextStyle(color: Colors.white70, fontSize: 16),
-                              ),
-                            ),
-                            const SizedBox(width: 24),
-                            GestureDetector(
-                              onTap: () => setState(() => _showEmptyFollowing = false),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Text(
-                                    'Feed',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  Container(
-                                    margin: const EdgeInsets.only(top: 4),
-                                    height: 2,
-                                    width: 24,
-                                    color: Colors.white,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.send, color: Colors.white, size: 28),
-                          const SizedBox(height: 4),
-                          const Text('Kirim ke Wajah', style: TextStyle(color: Colors.white70, fontSize: 12)),
-                          const SizedBox(height: 16),
-                          const Icon(Icons.camera_alt, color: Colors.white, size: 28),
-                          const SizedBox(height: 4),
-                          const Text('Cari Foto Kamu', style: TextStyle(color: Colors.white70, fontSize: 12)),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            )
-          : AppBar(
-              title: _navBarItems[_selectedIndex].title,
-            ),
+          ? _buildHomeAppBar()
+          : AppBar(title: Text(_navTitle(_selectedIndex))),
       body: isHome
           ? (_showEmptyFollowing
-              ? const Center(
-                  child: Text(
-                    'Kamu belum follow fotografer siapapun.',
-                    style: TextStyle(color: Color.fromARGB(255, 0, 0, 0), fontSize: 18),
-                    textAlign: TextAlign.center,
-                  ),
-                )
+              ? _buildEmptyFollowing()
               : _buildShortsFeed())
-          : _buildPlaceholder(),
+          : _buildPlaceholder(_selectedIndex),
       bottomNavigationBar: SalomonBottomBar(
         currentIndex: _selectedIndex,
         selectedItemColor: const Color(0xff6200ee),
         unselectedItemColor: const Color(0xff757575),
-        onTap: (i) => setState(() {
-          _selectedIndex = i;
-          if (i != 0) _showEmptyFollowing = false;
-        }),
-        items: _navBarItems,
+        onTap: (i) {
+          // jika photographer dan tap item ke-2 (index 2), langsung CreateFGForm
+          if (i == 2 && _isPhotographer) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const CreateFGForm()),
+            );
+            return;
+          }
+          setState(() {
+            _selectedIndex = i;
+            if (i != 0) _showEmptyFollowing = false;
+          });
+        },
+        items: _navItems(),
       ),
     );
   }
 
-  Widget _buildPlaceholder() {
-    switch (_selectedIndex) {
+  PreferredSizeWidget _buildHomeAppBar() => PreferredSize(
+        preferredSize: const Size.fromHeight(130),
+        child: SafeArea(
+          bottom: false,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(width: 28),
+                _buildFollowFeedToggle(),
+                _buildActionIcons(),
+              ],
+            ),
+          ),
+        ),
+      );
+
+  Widget _buildFollowFeedToggle() => Expanded(
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            GestureDetector(
+              onTap: () => setState(() => _showEmptyFollowing = true),
+              child: Text('Mengikuti',
+                  style: TextStyle(
+                      color: _showEmptyFollowing ? Colors.white70 : Colors.white,
+                      fontSize: 16)),
+            ),
+            const SizedBox(width: 24),
+            GestureDetector(
+              onTap: () => setState(() => _showEmptyFollowing = false),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Feed',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold)),
+                  Container(
+                      margin: const EdgeInsets.only(top: 4),
+                      height: 2,
+                      width: 24,
+                      color: Colors.white),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+
+  Widget _buildActionIcons() => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: const [
+          Icon(Icons.send, color: Colors.white, size: 28),
+          SizedBox(height: 4),
+          Text('Kirim ke Wajah', style: TextStyle(color: Colors.white70, fontSize: 12)),
+          SizedBox(height: 16),
+          Icon(Icons.camera_alt, color: Colors.white, size: 28),
+          SizedBox(height: 4),
+          Text('Cari Foto Kamu', style: TextStyle(color: Colors.white70, fontSize: 12)),
+        ],
+      );
+
+  String _navTitle(int idx) {
+    switch (idx) {
       case 1:
-        return const Center(child: Text('Saved'));
+        return 'Saved';
       case 2:
-        return const Center(child: Text('Search'));
+        return _isPhotographer ? 'Buat Sesi Foto' : 'Search';
       case 3:
-        return const Center(child: Text('Profile'));
+        return 'Profile';
       case 4:
-        return const SettingsPage2();
+        return 'Settings';
       default:
-        return const SizedBox.shrink();
+        return '';
     }
   }
 
+  List<SalomonBottomBarItem> _navItems() => [
+        SalomonBottomBarItem(
+            icon: const Icon(Icons.home),
+            title: const Text("Home"),
+            selectedColor: Colors.purple),
+        SalomonBottomBarItem(
+            icon: const Icon(Icons.favorite_border),
+            title: const Text("Saved"),
+            selectedColor: Colors.pink),
+        SalomonBottomBarItem(
+          icon: Icon(_isPhotographer ? Icons.add_circle : Icons.search),
+          title: Text(_isPhotographer ? "Create" : "Search"),
+          selectedColor: _isPhotographer ? Colors.green : Colors.orange,
+        ),
+        SalomonBottomBarItem(
+            icon: const Icon(Icons.person),
+            title: const Text("Profile"),
+            selectedColor: Colors.teal),
+        SalomonBottomBarItem(
+            icon: const Icon(Icons.settings),
+            title: const Text("Settings"),
+            selectedColor: Colors.grey),
+      ];
+
+  Widget _buildEmptyFollowing() => const Center(
+        child: Text(
+          'Kamu belum follow fotografer siapapun.',
+          style: TextStyle(color: Colors.black, fontSize: 18),
+          textAlign: TextAlign.center,
+        ),
+      );
+
   Widget _buildShortsFeed() {
     if (_isLoading) return const Center(child: CircularProgressIndicator());
-
     return PageView.builder(
       controller: _pageController,
       scrollDirection: Axis.vertical,
@@ -278,7 +324,6 @@ class _HomePageState extends State<HomePage> {
                   width: 40,
                   height: 60,
                   decoration: BoxDecoration(
-                    shape: BoxShape.rectangle,
                     borderRadius: BorderRadius.circular(8),
                     image: const DecorationImage(
                       image: AssetImage('assets/img/dum_prof.jpg'),
@@ -323,6 +368,21 @@ class _HomePageState extends State<HomePage> {
         ]);
       },
     );
+  }
+
+  Widget _buildPlaceholder(int idx) {
+    switch (idx) {
+      case 1:
+        return const Center(child: Text('Saved'));
+      case 2:
+        return _isPhotographer ? const CreateFGForm() : const Center(child: Text('Search'));
+      case 3:
+        return const Center(child: Text('Profile'));
+      case 4:
+        return const SettingsPage2();
+      default:
+        return const SizedBox.shrink();
+    }
   }
 }
 
