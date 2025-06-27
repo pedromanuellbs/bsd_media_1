@@ -28,7 +28,7 @@ dependencies:
   path: ^1.8.3
 
   # HTTP & JSON
-  http: ^1.1.0
+  http: ^1.2.0
 
   # Firebase core
   firebase_core: ^3.14.0
@@ -39,8 +39,13 @@ dependencies:
   # Cloud Firestore
   cloud_firestore: ^5.6.9
 
+  #select file
+  file_picker: ^10.2.0
+
   # Firebase Storage (for photos, QRIS, etc.)
   firebase_storage: ^12.4.7
+
+  firebase_storage_web: ^3.10.14
 
 
 dev_dependencies:

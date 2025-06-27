@@ -1,260 +1,188 @@
 // screens/auth/sign_in.dart
+
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../home/home.dart';
 import 'sign_up.dart';
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class SignInPage extends StatefulWidget {
+  const SignInPage({Key? key}) : super(key: key);
+
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'BSD Media',
-      theme: ThemeData(useMaterial3: true),
-      home: const SignInPage(),
-      debugShowCheckedModeBanner: false,
-    );
-  }
+  State<SignInPage> createState() => _SignInPageState();
 }
 
-class SignInPage extends StatelessWidget {
-  const SignInPage({Key? key}) : super(key: key);
+class _SignInPageState extends State<SignInPage> {
+  final _emailCtrl = TextEditingController();
+  final _pwCtrl = TextEditingController();
+  bool _pwVisible = false;
+  bool _loading = false;
+  bool _isPhotographer = false; // <-- Tambah state
+
+  @override
+  void dispose() {
+    _emailCtrl.dispose();
+    _pwCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _signIn() async {
+    if (_emailCtrl.text.isEmpty || _pwCtrl.text.isEmpty) return;
+    setState(() => _loading = true);
+
+    try {
+      final cred = await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: _emailCtrl.text.trim(),
+        password: _pwCtrl.text.trim(),
+      );
+
+      // Jika photographer, bisa tambah pengecekan role di Firestore jika dibutuhkan
+      // Tapi sesuai permintaan sekarang, cukup sign in saja.
+
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const HomePage()),
+        );
+      }
+    } on FirebaseAuthException catch (e) {
+      _showError(e.message ?? 'Gagal login');
+    } catch (e) {
+      _showError(e.toString());
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  void _showError(String msg) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Error'),
+        content: Text(msg),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK'))
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final bool isSmall = MediaQuery.of(context).size.width < 600;
     return Scaffold(
       backgroundColor: Colors.black,
       body: Center(
-        child: isSmall
-            ? Column(mainAxisSize: MainAxisSize.min, children: const [
-                _Logo(),
-                _FormContent(),
-              ])
-            : Container(
-                padding: const EdgeInsets.all(32),
-                constraints: const BoxConstraints(maxWidth: 800),
-                child: Row(children: const [
-                  Expanded(child: _Logo()),
-                  Expanded(child: Center(child: _FormContent())),
-                ]),
-              ),
-      ),
-    );
-  }
-}
-
-class _Logo extends StatelessWidget {
-  const _Logo({Key? key}) : super(key: key);
-  @override
-  Widget build(BuildContext context) {
-    final bool isSmall = MediaQuery.of(context).size.width < 600;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Image.asset(
-          'assets/logo-bsd-media.png',
-          width: isSmall ? 100 : 200,
-        ),
-      ],
-    );
-  }
-}
-
-class _FormContent extends StatefulWidget {
-  const _FormContent({Key? key}) : super(key: key);
-  @override
-  State<_FormContent> createState() => _FormContentState();
-}
-
-class _FormContentState extends State<_FormContent> {
-  bool _isPasswordVisible = false;
-  bool _isFgPasswordVisible = false;     // new FG visibility flag
-  bool _rememberMe = false;
-  bool _isPhotographer = false;
-  final _formKey = GlobalKey<FormState>();
-
-  @override
-  Widget build(BuildContext context) {
-    return ContentBox(
-      child: Form(
-        key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // ─── Form Klien ──────────────────────────────────────────
-            if (!_isPhotographer) ...[
-              TextFormField(
-                key: const ValueKey('std-username'),
-                validator: (v) =>
-                    v == null || v.isEmpty ? 'Please enter your username' : null,
-                decoration: const InputDecoration(
-                  labelText: 'Username',
-                  hintText: 'Enter your username',
-                  prefixIcon: Icon(Icons.person_outline),
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                key: const ValueKey('std-password'),
-                validator: (v) {
-                  if (v == null || v.isEmpty) {
-                    return 'Please enter your password';
-                  }
-                  if (v.length < 6) {
-                    return 'Password must be at least 6 characters';
-                  }
-                  return null;
-                },
-                obscureText: !_isPasswordVisible,
-                decoration: InputDecoration(
-                  labelText: 'Password',
-                  hintText: 'Enter your password',
-                  prefixIcon: const Icon(Icons.lock_outline_rounded),
-                  border: const OutlineInputBorder(),
-                  suffixIcon: IconButton(
-                    icon: Icon(_isPasswordVisible
-                        ? Icons.visibility_off
-                        : Icons.visibility),
-                    onPressed: () =>
-                        setState(() => _isPasswordVisible = !_isPasswordVisible),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
-
-            // ─── Form Photographer ────────────────────────────────────
-            if (_isPhotographer) ...[
-              TextFormField(
-                key: const ValueKey('fg-username'),
-                validator: (v) => v == null || v.isEmpty
-                    ? 'Please enter your FG username'
-                    : null,
-                decoration: const InputDecoration(
-                  labelText: 'Username FG',
-                  hintText: 'Enter your FG username',
-                  prefixIcon: Icon(Icons.person_outline),
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 16),
-              // FG Password with view toggle
-              TextFormField(
-                key: const ValueKey('fg-password'),
-                validator: (v) => v == null || v.isEmpty
-                    ? 'Please enter your FG password'
-                    : null,
-                obscureText: !_isFgPasswordVisible,
-                decoration: InputDecoration(
-                  labelText: 'Password FG',
-                  hintText: 'Enter your FG password',
-                  prefixIcon: const Icon(Icons.lock_outline_rounded),
-                  border: const OutlineInputBorder(),
-                  suffixIcon: IconButton(
-                    icon: Icon(_isFgPasswordVisible
-                        ? Icons.visibility_off
-                        : Icons.visibility),
-                    onPressed: () => setState(
-                        () => _isFgPasswordVisible = !_isFgPasswordVisible),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
-
-            // ─── Remember me (selalu di bawah semua form) ─────────────
-            CheckboxListTile(
-              value: _rememberMe,
-              onChanged: (v) => setState(() => _rememberMe = v ?? false),
-              title: const Text('Remember me'),
-              controlAffinity: ListTileControlAffinity.leading,
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-            ),
-
-            // ─── Toggler link ────────────────────────────────────────
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton(
-                onPressed: () =>
-                    setState(() => _isPhotographer = !_isPhotographer),
-                child: Text(
-                  _isPhotographer
-                      ? 'Kamu Bukan Fotografer?'
-                      : 'Kamu Fotografer?',
-                  style: TextStyle(
-                    decoration: TextDecoration.underline,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            // ─── Sign Up & Sign In Buttons ───────────────────────────
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const SignUpPage())),
-                style:
-                    ElevatedButton.styleFrom(padding: const EdgeInsets.all(12)),
-                child: const Text(
-                  'Sign Up',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () {
-                  if (_formKey.currentState?.validate() ?? false) {
-                    Navigator.of(context).push(MaterialPageRoute(
-                        builder: (_) => const HomePage()));
-                  }
-                },
-                style:
-                    ElevatedButton.styleFrom(padding: const EdgeInsets.all(12)),
-                child: const Text(
-                  'Sign In',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class ContentBox extends StatelessWidget {
-  final Widget child;
-  const ContentBox({Key? key, required this.child}) : super(key: key);
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: const [
-          BoxShadow(
-            blurRadius: 10,
-            offset: Offset(0, 4),
-            spreadRadius: 1,
-            color: Colors.black12,
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 32),
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
           ),
-        ],
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Username (Klien/Fotografer)
+              TextFormField(
+                controller: _emailCtrl,
+                decoration: InputDecoration(
+                  labelText: _isPhotographer ? 'Username Fotografer' : 'Username Klien',
+                  prefixIcon: const Icon(Icons.email_outlined),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Password (Klien/Fotografer)
+              TextFormField(
+                controller: _pwCtrl,
+                obscureText: !_pwVisible,
+                decoration: InputDecoration(
+                  labelText: _isPhotographer ? 'Password Fotografer' : 'Password Klien',
+                  prefixIcon: const Icon(Icons.lock_outline),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _pwVisible ? Icons.visibility_off : Icons.visibility,
+                    ),
+                    onPressed: () => setState(() => _pwVisible = !_pwVisible),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+
+              // Toggle link: di atas tombol Sign In
+              if (!_isPhotographer) // Kalau belum photographer
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton(
+                    onPressed: () => setState(() => _isPhotographer = true),
+                    child: const Text(
+                      'Kamu Fotografer?',
+                      style: TextStyle(
+                        color: Colors.deepPurple,
+                        fontSize: 14,
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                    style: TextButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      minimumSize: const Size(0, 0),
+                    ),
+                  ),
+                ),
+
+              // Toggle link: Kembali ke klien
+              if (_isPhotographer) // Jika sudah photographer, ganti link
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton(
+                    onPressed: () => setState(() => _isPhotographer = false),
+                    child: const Text(
+                      'Kamu Bukan Fotografer?',
+                      style: TextStyle(
+                        color: Colors.deepPurple,
+                        fontSize: 14,
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                    style: TextButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      minimumSize: const Size(0, 0),
+                    ),
+                  ),
+                ),
+
+              const SizedBox(height: 8),
+
+              // Tombol Sign In
+              ElevatedButton(
+                onPressed: _loading ? null : _signIn,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.deepPurple.shade50,
+                  foregroundColor: Colors.deepPurple,
+                  minimumSize: const Size.fromHeight(48),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  textStyle: const TextStyle(fontSize: 16),
+                ),
+                child: _loading
+                    ? const CircularProgressIndicator()
+                    : const Text('Sign In'),
+              ),
+              const SizedBox(height: 12),
+
+              // Tombol Sign Up (untuk daftar user baru)
+              TextButton(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SignUpPage()),
+                ),
+                child: const Text('Sign Up'),
+              ),
+            ],
+          ),
+        ),
       ),
-      child: child,
     );
   }
-}
-
-void main() {
-  runApp(const MyApp());
 }

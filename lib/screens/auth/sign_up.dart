@@ -1,270 +1,261 @@
 // screens/auth/sign_up.dart
 
+import 'dart:io' show File;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:bsd_media/face_ai/face_capture_page.dart';
+import 'sign_in.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-
-import '../home/home.dart';
-import 'sign_in.dart';
-import 'package:bsd_media/face_ai/face_capture_page.dart';
-
-/// Roles for sign up
 enum _SignUpMode { selection, client, photographer }
 
 class SignUpPage extends StatefulWidget {
   const SignUpPage({Key? key}) : super(key: key);
-
   @override
   State<SignUpPage> createState() => _SignUpPageState();
 }
 
 class _SignUpPageState extends State<SignUpPage> {
   _SignUpMode _mode = _SignUpMode.selection;
-  bool _agreedEula = false;
-
   final _formKey = GlobalKey<FormState>();
-  final _usernameController = TextEditingController();
-  final _emailController    = TextEditingController();
-  final _passwordController = TextEditingController();
-  final _confirmController  = TextEditingController();
-
-  bool _isPasswordVisible = false;
-  bool _isConfirmVisible  = false;
+  final _uC = TextEditingController();
+  final _eC = TextEditingController();
+  final _pC = TextEditingController();
+  final _cC = TextEditingController();
+  bool _pwVis = false, _cpwVis = false, _loading = false, _agreedEula = false;
+  bool _faceRegistered = false;
+  File? _faceFile; // Simpan file wajah klien untuk referensi jika mau
 
   @override
   void dispose() {
-    _usernameController.dispose();
-    _emailController.dispose();
-    _passwordController.dispose();
-    _confirmController.dispose();
+    _uC.dispose();
+    _eC.dispose();
+    _pC.dispose();
+    _cC.dispose();
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: Center(
-        child: ContentBox(
-          child: _mode == _SignUpMode.selection
-              ? _buildModeSelection()
-              : _mode == _SignUpMode.client
-                  ? _buildClientForm()
-                  : _buildPhotographerForm(),
-        ),
+  Future<void> _showSuccessAndGoLogin() async {
+    await showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Registrasi Berhasil'),
+        content: const Text('Silakan login dengan akun Anda.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK')),
+        ],
       ),
     );
+    if (!mounted) return;
+    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const SignInPage()));
+  }
+
+  void _showError(String msg) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Error'),
+        content: Text(msg),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK'))
+        ],
+      ),
+    );
+  }
+
+  Future<bool> registerFaceLBPH(File faceImage, String userId) async {
+    try {
+      final req = http.MultipartRequest(
+        'POST',
+        Uri.parse('https://backendlbphbsdmedia-production.up.railway.app/'), // <-- Ganti ke URL backend LBPH kamu
+      );
+      req.fields['user_id'] = userId;
+      req.files.add(await http.MultipartFile.fromPath('image', faceImage.path));
+      final resp = await req.send();
+      final respStr = await resp.stream.bytesToString();
+      final result = json.decode(respStr);
+      return result['success'] == true;
+    } catch (e) {
+      debugPrint("Register Face error: $e");
+      return false;
+    }
   }
 
   Widget _buildModeSelection() {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Text('Kamu adalah?',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        const Text('Kamu adalah?', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         const SizedBox(height: 16),
         ElevatedButton(
-          onPressed: () => setState(() {
-            _mode = _SignUpMode.client;
-            _agreedEula = false;
-          }),
-          child: const Text('Klien'),
+          onPressed: () => setState(() { _mode = _SignUpMode.client; _agreedEula = false; }),
           style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+          child: const Text('Klien'),
         ),
         const SizedBox(height: 8),
         ElevatedButton(
-          onPressed: () => setState(() {
-            _mode = _SignUpMode.photographer;
-          }),
-          child: const Text('Fotografer'),
+          onPressed: () => setState(() => _mode = _SignUpMode.photographer),
           style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+          child: const Text('Fotografer'),
+        ),
+        const SizedBox(height: 8),
+        ElevatedButton(
+          onPressed: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const SignInPage())),
+          style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+          child: const Text('Kembali'),
         ),
       ],
     );
   }
 
-  Widget _buildClientForm() {
+  Widget _clientForm() {
     return Stack(
       children: [
         Form(
           key: _formKey,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Username
-                TextFormField(
-                  controller: _usernameController,
-                  decoration: const InputDecoration(labelText: 'Username'),
-                  validator: (v) =>
-                      v == null || v.isEmpty ? 'Please enter a username' : null,
-                ),
-                const SizedBox(height: 8),
-                // Email
-                TextFormField(
-                  controller: _emailController,
-                  decoration: const InputDecoration(labelText: 'Email'),
-                  validator: (v) =>
-                      v == null || v.isEmpty ? 'Please enter your email' : null,
-                ),
-                const SizedBox(height: 8),
-                // Password
-                TextFormField(
-                  controller: _passwordController,
-                  obscureText: !_isPasswordVisible,
-                  decoration: InputDecoration(
-                    labelText: 'Password',
-                    suffixIcon: IconButton(
-                      icon: Icon(_isPasswordVisible
-                          ? Icons.visibility_off
-                          : Icons.visibility),
-                      onPressed: () =>
-                          setState(() => _isPasswordVisible = !_isPasswordVisible),
-                    ),
+          child: ListView(
+            padding: const EdgeInsets.all(24),
+            shrinkWrap: true,
+            children: [
+              TextFormField(
+                controller: _uC,
+                decoration: const InputDecoration(labelText: 'Username'),
+                validator: (v) => v==null||v.isEmpty?'Harus diisi':null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _eC,
+                decoration: const InputDecoration(labelText: 'Email'),
+                validator: (v) => v==null||v.isEmpty?'Harus diisi':null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _pC,
+                obscureText: !_pwVis,
+                decoration: InputDecoration(
+                  labelText: 'Password',
+                  suffixIcon: IconButton(
+                    icon: Icon(_pwVis?Icons.visibility_off:Icons.visibility),
+                    onPressed: ()=> setState(()=>_pwVis=!_pwVis),
                   ),
-                  validator: (v) =>
-                      v == null || v.length < 6 ? 'Min 6 characters' : null,
                 ),
-                const SizedBox(height: 8),
-                // Confirm
-                TextFormField(
-                  controller: _confirmController,
-                  obscureText: !_isConfirmVisible,
-                  decoration: InputDecoration(
-                    labelText: 'Confirm Password',
-                    suffixIcon: IconButton(
-                      icon: Icon(_isConfirmVisible
-                          ? Icons.visibility_off
-                          : Icons.visibility),
-                      onPressed: () =>
-                          setState(() => _isConfirmVisible = !_isConfirmVisible),
-                    ),
+                validator: (v)=> v==null||v.length<6?'Min 6 karakter':null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _cC,
+                obscureText: !_cpwVis,
+                decoration: InputDecoration(
+                  labelText: 'Konfirmasi Password',
+                  suffixIcon: IconButton(
+                    icon: Icon(_cpwVis?Icons.visibility_off:Icons.visibility),
+                    onPressed: ()=> setState(()=>_cpwVis=!_cpwVis),
                   ),
-                  validator: (v) =>
-                      v != _passwordController.text ? 'Passwords do not match' : null,
                 ),
-                const SizedBox(height: 16),
+                validator: (v)=> v!=_pC.text?'Tidak cocok':null,
+              ),
+              const SizedBox(height: 16),
 
-                // Face recognition (optional)
-                ElevatedButton(
-                  onPressed: () async {
-                    final cameras = await availableCameras();
-                    final camera = cameras.first;
-                    await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) => FaceCapturePage(camera: camera)),
-                    );
-                  },
-                  child: const Text('Face Recognition'),
-                  style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-                ),
-                const SizedBox(height: 8),
-
-                // Register (Client)
-                ElevatedButton(
-                  onPressed: () async {
-                    if (!(_formKey.currentState?.validate() ?? false) ||
-                        !_agreedEula) return;
-                    try {
-                      final cred = await FirebaseAuth.instance
-                          .createUserWithEmailAndPassword(
-                              email: _emailController.text.trim(),
-                              password: _passwordController.text.trim());
-                      await FirebaseFirestore.instance
-                          .collection('users')
-                          .doc(cred.user!.uid)
-                          .set({
-                        'username': _usernameController.text.trim(),
-                        'email': _emailController.text.trim(),
-                        'role': 'client',
-                        'createdAt': FieldValue.serverTimestamp(),
+              // Face Recognition
+              ElevatedButton(
+                onPressed: () async {
+                  final cams = await availableCameras();
+                  final file = await Navigator.push<File?>(
+                    context,
+                    MaterialPageRoute(builder: (_) => FaceCapturePage(camera: cams.first)),
+                  );
+                  if (file != null) {
+                    final userId = _eC.text.trim(); // Biasanya email
+                    final success = await registerFaceLBPH(file, userId);
+                    if (success) {
+                      setState(() {
+                        _faceRegistered = true;
+                        _faceFile = file;
                       });
-                      if (mounted) {
-                        Navigator.pushReplacement(context,
-                            MaterialPageRoute(builder: (_) => const HomePage()));
-                      }
-                    } on FirebaseAuthException catch (e) {
-                      showDialog(
-                        context: context,
-                        builder: (_) => AlertDialog(
-                          title: const Text('Registrasi Gagal'),
-                          content: Text('${e.code}: ${e.message}'),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(context),
-                              child: const Text('OK'),
-                            )
-                          ],
-                        ),
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Registrasi wajah berhasil!')),
                       );
-                    } catch (e) {
-                      showDialog(
-                        context: context,
-                        builder: (_) => AlertDialog(
-                          title: const Text('Error'),
-                          content: Text(e.toString()),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(context),
-                              child: const Text('OK'),
-                            )
-                          ],
-                        ),
+                    } else {
+                      setState(() {
+                        _faceRegistered = false;
+                        _faceFile = null;
+                      });
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Registrasi wajah gagal!')),
                       );
                     }
-                  },
-                  child: const Text('Register Client'),
-                  style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-                ),
-                const SizedBox(height: 8),
-                TextButton(
-                  onPressed: () => setState(() => _mode = _SignUpMode.selection),
-                  child: const Text('Back'),
-                ),
-              ],
-            ),
+                  }
+                },
+                style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                child: Text(_faceRegistered ? 'Wajah sudah teregistrasi' : 'Face Recognition'),
+              ),
+
+              const SizedBox(height: 8),
+
+              // Register Client
+              ElevatedButton(
+                onPressed: (!_faceRegistered || _loading) ? null : () async {
+                  if (!_formKey.currentState!.validate()||!_agreedEula) return;
+                  setState(()=>_loading=true);
+                  try {
+                    final cred = await FirebaseAuth.instance
+                      .createUserWithEmailAndPassword(email:_eC.text.trim(),password:_pC.text.trim());
+                    await FirebaseFirestore.instance.collection('users').doc(cred.user!.uid).set({
+                      'username':_uC.text.trim(),
+                      'email':_eC.text.trim(),
+                      'role':'client',
+                      'face_registered': true, // Status face recognition
+                      'createdAt':FieldValue.serverTimestamp(),
+                    });
+                    await _showSuccessAndGoLogin();
+                  } on FirebaseAuthException catch(e) {
+                    _showError(e.message??'Gagal registrasi');
+                  } finally {
+                    if(mounted) setState(()=>_loading=false);
+                  }
+                },
+                style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                child: _loading?const CircularProgressIndicator():const Text('Register Client'),
+              ),
+              const SizedBox(height: 8),
+              TextButton(onPressed: ()=>setState(()=>_mode=_SignUpMode.selection), child: const Text('Back')),
+            ],
           ),
         ),
 
-        // EULA overlay only on client
+        // EULA overlay
         if (!_agreedEula)
           Positioned.fill(
             child: Container(
               color: Colors.black54,
               alignment: Alignment.center,
               child: SizedBox(
-                width: 300,
-                height: 400,
-                child: ContentBox(
-                  child: Column(
-                    children: [
-                      const Text(
-                        'PERJANJIAN PRIVASI DATA – BSD MEDIA',
-                        style:
-                            TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 8),
-                      const Expanded(
-                        child: SingleChildScrollView(
-                          child: Text(
-                            '… EULA text here …',
-                            style: TextStyle(fontSize: 14),
-                          ),
+                width: 300, height: 380,
+                child: Card(
+                  margin: EdgeInsets.zero,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      children: [
+                        const Text('PERJANJIAN PRIVASI DATA – BSD MEDIA',
+                          style: TextStyle(fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+                        const SizedBox(height: 8),
+                        const Expanded(child: SingleChildScrollView(
+                          child: Text('… isi EULA singkat di sini …'),
+                        )),
+                        CheckboxListTile(
+                          title: const Text('Saya setuju'),
+                          value: _agreedEula,
+                          onChanged: (v)=> setState(()=>_agreedEula=v!),
                         ),
-                      ),
-                      CheckboxListTile(
-                        value: _agreedEula,
-                        onChanged: (v) =>
-                            setState(() => _agreedEula = v ?? false),
-                        title: const Text('Saya menyetujui EULA'),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -274,167 +265,117 @@ class _SignUpPageState extends State<SignUpPage> {
     );
   }
 
-  Widget _buildPhotographerForm() {
+  Widget _photogForm() {
     return Form(
       key: _formKey,
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Username FG
-            TextFormField(
-              controller: _usernameController,
-              decoration: const InputDecoration(labelText: 'Username FG'),
-              validator: (v) =>
-                  v == null || v.isEmpty ? 'Please enter a username' : null,
-            ),
-            const SizedBox(height: 8),
-            // Email FG
-            TextFormField(
-              controller: _emailController,
-              decoration: const InputDecoration(labelText: 'Email FG'),
-              validator: (v) =>
-                  v == null || v.isEmpty ? 'Please enter your email' : null,
-            ),
-            const SizedBox(height: 8),
-            // Password FG
-            TextFormField(
-              controller: _passwordController,
-              obscureText: !_isPasswordVisible,
-              decoration: InputDecoration(
-                labelText: 'Password FG',
-                suffixIcon: IconButton(
-                  icon: Icon(_isPasswordVisible
-                      ? Icons.visibility_off
-                      : Icons.visibility),
-                  onPressed: () => setState(
-                      () => _isPasswordVisible = !_isPasswordVisible),
-                ),
+      child: ListView(
+        padding: const EdgeInsets.all(24),
+        shrinkWrap: true,
+        children: [
+          TextFormField(
+            controller: _uC,
+            decoration: const InputDecoration(labelText: 'Username Fotografer'),
+            validator: (v)=>v==null||v.isEmpty?'Harus diisi':null,
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _eC,
+            decoration: const InputDecoration(labelText: 'Email Fotografer'),
+            validator: (v)=>v==null||v.isEmpty?'Harus diisi':null,
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _pC,
+            obscureText: !_pwVis,
+            decoration: InputDecoration(
+              labelText: 'Password Fotografer',
+              suffixIcon: IconButton(
+                icon: Icon(_pwVis?Icons.visibility_off:Icons.visibility),
+                onPressed: ()=>setState(()=>_pwVis=!_pwVis),
               ),
-              validator: (v) =>
-                  v == null || v.length < 6 ? 'Min 6 characters' : null,
             ),
-            const SizedBox(height: 8),
-            // Confirm FG
-            TextFormField(
-              controller: _confirmController,
-              obscureText: !_isConfirmVisible,
-              decoration: InputDecoration(
-                labelText: 'Confirm Password FG',
-                suffixIcon: IconButton(
-                  icon: Icon(_isConfirmVisible
-                      ? Icons.visibility_off
-                      : Icons.visibility),
-                  onPressed: () => setState(
-                      () => _isConfirmVisible = !_isConfirmVisible),
-                ),
+            validator: (v)=>v==null||v.length<6?'Min 6 karakter':null,
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _cC,
+            obscureText: !_cpwVis,
+            decoration: InputDecoration(
+              labelText: 'Konfirmasi Password Fotografer',
+              suffixIcon: IconButton(
+                icon: Icon(_cpwVis?Icons.visibility_off:Icons.visibility),
+                onPressed: ()=>setState(()=>_cpwVis=!_cpwVis),
               ),
-              validator: (v) =>
-                  v != _passwordController.text ? 'Passwords do not match' : null,
             ),
-            const SizedBox(height: 16),
+            validator: (v)=>v!=_pC.text?'Tidak cocok':null,
+          ),
+          const SizedBox(height: 16),
 
-            // QRIS upload button placeholder
-            ElevatedButton(
-              onPressed: () {
-                // TODO: upload QRIS logic here
-              },
-              child: const Text('Upload QRIS'),
-              style:
-                  ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-            ),
-            const SizedBox(height: 8),
+          // Daftar + Upload QRIS
+          ElevatedButton(
+            onPressed: _loading?null:() async {
+              if (!_formKey.currentState!.validate()) return;
+              setState(()=>_loading=true);
+              try {
+                // auth/register
+                final cred = await FirebaseAuth.instance
+                  .createUserWithEmailAndPassword(email:_eC.text.trim(),password:_pC.text.trim());
 
-            // Register (Fotografer)
-            ElevatedButton(
-              onPressed: () async {
-                if (!(_formKey.currentState?.validate() ?? false)) return;
-                try {
-                  final cred = await FirebaseAuth.instance
-                      .createUserWithEmailAndPassword(
-                          email: _emailController.text.trim(),
-                          password: _passwordController.text.trim());
-                  await FirebaseFirestore.instance
-                      .collection('users')
-                      .doc(cred.user!.uid)
-                      .set({
-                    'username': _usernameController.text.trim(),
-                    'email': _emailController.text.trim(),
-                    'role': 'photographer',
-                    'createdAt': FieldValue.serverTimestamp(),
-                  });
-                  if (mounted) {
-                    Navigator.pushReplacement(context,
-                        MaterialPageRoute(builder: (_) => const HomePage()));
-                  }
-                } on FirebaseAuthException catch (e) {
-                  showDialog(
-                    context: context,
-                    builder: (_) => AlertDialog(
-                      title: const Text('Registrasi Gagal'),
-                      content: Text('${e.code}: ${e.message}'),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context),
-                          child: const Text('OK'),
-                        )
-                      ],
-                    ),
-                  );
-                } catch (e) {
-                  showDialog(
-                    context: context,
-                    builder: (_) => AlertDialog(
-                      title: const Text('Error'),
-                      content: Text(e.toString()),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context),
-                          child: const Text('OK'),
-                        )
-                      ],
-                    ),
-                  );
-                }
-              },
-              child: const Text('Register Fotografer'),
-              style:
-                  ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-            ),
-            const SizedBox(height: 8),
-            TextButton(
-              onPressed: () => setState(() => _mode = _SignUpMode.selection),
-              child: const Text('Back'),
-            ),
-          ],
-        ),
+                // pick file
+                final result = await FilePicker.platform.pickFiles(withData: kIsWeb);
+                if (result==null) throw 'Silakan pilih file QRIS';
+                final f = result.files.first;
+
+                // upload storage
+                final ref = FirebaseStorage.instance.ref('qris/${cred.user!.uid}/${f.name}');
+                if (kIsWeb) await ref.putData(f.bytes!);
+                else await ref.putFile(File(f.path!));
+                final url = await ref.getDownloadURL();
+
+                // simpan ke Firestore
+                await FirebaseFirestore.instance.collection('users').doc(cred.user!.uid).set({
+                  'username':_uC.text.trim(),
+                  'email':_eC.text.trim(),
+                  'role':'photographer',
+                  'qrisUrl':url,
+                  'createdAt':FieldValue.serverTimestamp(),
+                });
+
+                await _showSuccessAndGoLogin();
+              } catch(e) {
+                _showError(e.toString());
+              } finally {
+                if(mounted) setState(()=>_loading=false);
+              }
+            },
+            style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+            child: _loading?const CircularProgressIndicator():const Text('Daftar Fotografer'),
+          ),
+          const SizedBox(height: 8),
+          TextButton(onPressed: ()=>setState(()=>_mode=_SignUpMode.selection), child: const Text('Back')),
+        ],
       ),
     );
   }
-}
-
-/// Reusable container for forms
-class ContentBox extends StatelessWidget {
-  final Widget child;
-  const ContentBox({Key? key, required this.child}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: const [
-          BoxShadow(
-            blurRadius: 10,
-            offset: Offset(0, 4),
-            spreadRadius: 1,
-            color: Colors.black12,
-          ),
-        ],
+    Widget body;
+    switch (_mode) {
+      case _SignUpMode.client:      body = _clientForm(); break;
+      case _SignUpMode.photographer: body = _photogForm(); break;
+      default:                       body = _buildModeSelection();
+    }
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Center(
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 32),
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+          child: body,
+        ),
       ),
-      child: child,
     );
   }
 }

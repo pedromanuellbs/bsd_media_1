@@ -2,13 +2,13 @@
 
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'firebase_options.dart';    // file yang kita buat di lib/firebase_options.dart
-import 'load_screen.dart';         // sesuaikan path jika berbeda
+import 'package:bsd_media/firebase_options.dart';   // ← pastikan ini sesuai nama paketmu
+import 'load_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 1. Inisialisasi core Firebase
+  // 2a. Inisialisasi Firebase dengan opsi yang kita generate
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
@@ -19,7 +19,7 @@ void main() async {
 class MyApp extends StatefulWidget {
   const MyApp({Key? key}) : super(key: key);
 
-  /// Agar child widget bisa akses state ini
+  /// Agar child widget (misal SettingsPage) bisa akses state
   static _MyAppState? of(BuildContext context) =>
       context.findAncestorStateOfType<_MyAppState>();
 
@@ -29,13 +29,6 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   ThemeMode _themeMode = ThemeMode.light;
-
-  /// 2. (Langkah nomor 2) — setelah init Firebase,
-  ///    Anda bisa langsung menggunakan FirebaseAuth dan Firestore
-  ///
-  /// Contoh: mengecek apakah user sudah login
-  /// di LoadScreen nanti, Anda bisa ambil:
-  /// final user = FirebaseAuth.instance.currentUser;
 
   void toggleTheme(bool isDark) {
     setState(() {
@@ -51,7 +44,8 @@ class _MyAppState extends State<MyApp> {
       theme: ThemeData.light(),
       darkTheme: ThemeData.dark(),
       themeMode: _themeMode,
-      home: const LoadScreen(),  // Tentukan widget pertama setelah Firebase ready
+      home: const LoadScreen(),
     );
   }
+  
 }
