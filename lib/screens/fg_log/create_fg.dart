@@ -13,13 +13,15 @@ class CreateFGForm extends StatefulWidget {
 
 class _CreateFGFormState extends State<CreateFGForm> {
   final _formKey = GlobalKey<FormState>();
-  final _dateCtrl = TextEditingController();
+  final _titleCtrl    = TextEditingController();
+  final _dateCtrl     = TextEditingController();
   final _locationCtrl = TextEditingController();
-  final _linkCtrl = TextEditingController();
+  final _linkCtrl     = TextEditingController();
   bool _loading = false;
 
   @override
   void dispose() {
+    _titleCtrl.dispose();
     _dateCtrl.dispose();
     _locationCtrl.dispose();
     _linkCtrl.dispose();
@@ -27,46 +29,43 @@ class _CreateFGFormState extends State<CreateFGForm> {
   }
 
   Future<void> _pickDate() async {
-    final DateTime? picked = await showDatePicker(
+    final picked = await showDatePicker(
       context: context,
       initialDate: DateTime.now(),
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
     );
     if (picked != null) {
-      setState(() {
-        _dateCtrl.text = '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
-      });
+      _dateCtrl.text = '${picked.year}-${picked.month.toString().padLeft(2,'0')}-${picked.day.toString().padLeft(2,'0')}';
     }
   }
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
+
     try {
-      final date = _dateCtrl.text;
-      final location = _locationCtrl.text.trim();
-      final link = _linkCtrl.text.trim();
       final uid = FirebaseAuth.instance.currentUser?.uid;
       if (uid == null) throw 'User belum login';
 
       await FirebaseFirestore.instance
           .collection('photo_sessions')
           .add({
-        'date': date,
-        'location': location,
-        'driveLink': link,
-        'photographerId': uid,
-        'createdAt': FieldValue.serverTimestamp(),
+        'activityName'   : _titleCtrl.text.trim(),
+        'date'           : _dateCtrl.text,
+        'location'       : _locationCtrl.text.trim(),
+        'driveLink'      : _linkCtrl.text.trim(),
+        'photographerId' : uid,
+        'createdAt'      : FieldValue.serverTimestamp(),
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Sesi foto berhasil disimpan')),
       );
-      Navigator.pop(context);
+      Navigator.of(context).pop();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: \$e')),
+        SnackBar(content: Text('Error: $e')),
       );
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -81,80 +80,90 @@ class _CreateFGFormState extends State<CreateFGForm> {
         backgroundColor: Colors.deepPurple,
       ),
       body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Date field
-                TextFormField(
-                  controller: _dateCtrl,
-                  readOnly: true,
-                  decoration: InputDecoration(
-                    labelText: 'Tanggal Sesi Foto',
-                    prefixIcon: const Icon(Icons.calendar_today),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
+        padding: const EdgeInsets.all(16),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Nama Kegiatan
+              TextFormField(
+                controller: _titleCtrl,
+                decoration: InputDecoration(
+                  labelText: 'Nama Kegiatan',
+                  prefixIcon: const Icon(Icons.title),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                  onTap: _pickDate,
-                  validator: (v) => v == null || v.isEmpty ? 'Pilih tanggal' : null,
                 ),
-                const SizedBox(height: 16),
+                validator: (v) => v == null || v.isEmpty ? 'Isi nama kegiatan' : null,
+              ),
+              const SizedBox(height: 16),
 
-                // Location field
-                TextFormField(
-                  controller: _locationCtrl,
-                  decoration: InputDecoration(
-                    labelText: 'Lokasi',
-                    prefixIcon: const Icon(Icons.location_on),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
+              // Tanggal
+              TextFormField(
+                controller: _dateCtrl,
+                readOnly: true,
+                decoration: InputDecoration(
+                  labelText: 'Tanggal Sesi Foto',
+                  prefixIcon: const Icon(Icons.calendar_today),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                  validator: (v) => v == null || v.isEmpty ? 'Isi lokasi' : null,
                 ),
-                const SizedBox(height: 16),
+                onTap: _pickDate,
+                validator: (v) => v == null || v.isEmpty ? 'Pilih tanggal' : null,
+              ),
+              const SizedBox(height: 16),
 
-                // Google Drive link field
-                TextFormField(
-                  controller: _linkCtrl,
-                  decoration: InputDecoration(
-                    labelText: 'Link Google Drive',
-                    prefixIcon: const Icon(Icons.link),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
+              // Lokasi
+              TextFormField(
+                controller: _locationCtrl,
+                decoration: InputDecoration(
+                  labelText: 'Lokasi',
+                  prefixIcon: const Icon(Icons.location_on),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                  validator: (v) {
-                    if (v == null || v.isEmpty) return 'Isi link Drive';
-                    final uri = Uri.tryParse(v);
-                    if (uri == null || !uri.isAbsolute) return 'Link tidak valid';
-                    return null;
-                  },
                 ),
-                const SizedBox(height: 24),
+                validator: (v) => v == null || v.isEmpty ? 'Isi lokasi' : null,
+              ),
+              const SizedBox(height: 16),
 
-                // Submit button
-                ElevatedButton(
-                  onPressed: _loading ? null : _submit,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.deepPurple,
-                    minimumSize: const Size.fromHeight(48),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
+              // Link Google Drive
+              TextFormField(
+                controller: _linkCtrl,
+                decoration: InputDecoration(
+                  labelText: 'Link Google Drive',
+                  prefixIcon: const Icon(Icons.link),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                  child: _loading
-                      ? const CircularProgressIndicator(
-                          valueColor: AlwaysStoppedAnimation(Colors.white),
-                        )
-                      : const Text('Simpan Sesi Foto'),
                 ),
-              ],
-            ),
+                validator: (v) {
+                  if (v == null || v.isEmpty) return 'Isi link Drive';
+                  final uri = Uri.tryParse(v);
+                  if (uri == null || !uri.isAbsolute) return 'Link tidak valid';
+                  return null;
+                },
+              ),
+              const SizedBox(height: 24),
+
+              // Tombol Simpan
+              ElevatedButton(
+                onPressed: _loading ? null : _submit,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.deepPurple,
+                  minimumSize: const Size.fromHeight(48),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: _loading
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : const Text('Simpan Sesi Foto'),
+              ),
+            ],
           ),
         ),
       ),

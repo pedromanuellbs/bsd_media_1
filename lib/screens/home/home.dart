@@ -8,6 +8,8 @@ import 'package:video_player/video_player.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../fg_log/create_fg.dart'; // sesuaikan path folder f_glog
+import '../fg_log/history_fg.dart';
+ 
 import 'settings.dart';
 
 class _ShortData {
@@ -126,6 +128,14 @@ class _HomePageState extends State<HomePage> {
         selectedItemColor: const Color(0xff6200ee),
         unselectedItemColor: const Color(0xff757575),
         onTap: (i) {
+          if (i == 1 && _isPhotographer) {
+  Navigator.push(context,
+    MaterialPageRoute(builder: (_) => const HistoryFGPage())
+  );
+  return;
+}
+
+          
           // jika photographer dan tap item ke-2 (index 2), langsung CreateFGForm
           if (i == 2 && _isPhotographer) {
             Navigator.push(
@@ -230,9 +240,11 @@ class _HomePageState extends State<HomePage> {
             title: const Text("Home"),
             selectedColor: Colors.purple),
         SalomonBottomBarItem(
-            icon: const Icon(Icons.favorite_border),
-            title: const Text("Saved"),
-            selectedColor: Colors.pink),
+  icon: const Icon(Icons.history),
+  title: const Text('History'),
+  selectedColor: Colors.teal,
+)
+,
         SalomonBottomBarItem(
           icon: Icon(_isPhotographer ? Icons.add_circle : Icons.search),
           title: Text(_isPhotographer ? "Create" : "Search"),

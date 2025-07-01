@@ -113,6 +113,7 @@ class _SignUpPageState extends State<SignUpPage> {
       ],
     );
   }
+  String? _qrisUrl;  
 
   Widget _clientForm() {
     return Stack(
@@ -309,50 +310,85 @@ class _SignUpPageState extends State<SignUpPage> {
             ),
             validator: (v)=>v!=_pC.text?'Tidak cocok':null,
           ),
+
+          const SizedBox(height: 24),
+
+          // == NEW: Upload QRIS Button ==
+          ElevatedButton.icon(
+            icon: const Icon(Icons.upload_file),
+            label: Text(_qrisUrl == null ? 'Upload QRIS kamu' : 'QRIS ter-upload'),
+            style: ElevatedButton.styleFrom(
+              minimumSize: const Size.fromHeight(48),
+            ),
+            onPressed: _loading ? null : () async {
+              // pilih file
+              final result = await FilePicker.platform.pickFiles(withData: kIsWeb);
+              if (result == null) return; // batal
+              setState(() => _loading = true);
+              try {
+                final f = result.files.first;
+                final ref = FirebaseStorage.instance
+                    .ref('qris/${FirebaseAuth.instance.currentUser?.uid ?? 'temp'}/${f.name}');
+                if (kIsWeb) {
+                  await ref.putData(f.bytes!);
+                } else {
+                  await ref.putFile(File(f.path!));
+                }
+                _qrisUrl = await ref.getDownloadURL();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('QRIS berhasil di-upload!')),
+                );
+              } catch (e) {
+                _showError('Upload QRIS gagal: $e');
+              } finally {
+                setState(() => _loading = false);
+              }
+            },
+          ),
+
           const SizedBox(height: 16),
 
-          // Daftar + Upload QRIS
+          // Daftar Fotografer (only enabled if QRIS sudah di-upload)
           ElevatedButton(
-            onPressed: _loading?null:() async {
+            onPressed: (_loading || _qrisUrl == null) ? null : () async {
               if (!_formKey.currentState!.validate()) return;
               setState(()=>_loading=true);
               try {
-                // auth/register
+                // 1) Auth
                 final cred = await FirebaseAuth.instance
-                  .createUserWithEmailAndPassword(email:_eC.text.trim(),password:_pC.text.trim());
-
-                // pick file
-                final result = await FilePicker.platform.pickFiles(withData: kIsWeb);
-                if (result==null) throw 'Silakan pilih file QRIS';
-                final f = result.files.first;
-
-                // upload storage
-                final ref = FirebaseStorage.instance.ref('qris/${cred.user!.uid}/${f.name}');
-                if (kIsWeb) await ref.putData(f.bytes!);
-                else await ref.putFile(File(f.path!));
-                final url = await ref.getDownloadURL();
-
-                // simpan ke Firestore
-                await FirebaseFirestore.instance.collection('users').doc(cred.user!.uid).set({
-                  'username':_uC.text.trim(),
-                  'email':_eC.text.trim(),
-                  'role':'photographer',
-                  'qrisUrl':url,
-                  'createdAt':FieldValue.serverTimestamp(),
-                });
-
+                  .createUserWithEmailAndPassword(
+                    email: _eC.text.trim(),
+                    password: _pC.text.trim(),
+                  );
+                // 2) Simpan di Firestore
+                await FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(cred.user!.uid)
+                  .set({
+                    'username': _uC.text.trim(),
+                    'email': _eC.text.trim(),
+                    'role': 'photographer',
+                    'qrisUrl': _qrisUrl!,
+                    'createdAt': FieldValue.serverTimestamp(),
+                  });
                 await _showSuccessAndGoLogin();
-              } catch(e) {
-                _showError(e.toString());
+              } on FirebaseAuthException catch (e) {
+                _showError(e.message ?? 'Gagal registrasi');
               } finally {
-                if(mounted) setState(()=>_loading=false);
+                setState(()=>_loading=false);
               }
             },
             style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-            child: _loading?const CircularProgressIndicator():const Text('Daftar Fotografer'),
+            child: _loading
+                ? const CircularProgressIndicator()
+                : const Text('Daftar Fotografer'),
           ),
+
           const SizedBox(height: 8),
-          TextButton(onPressed: ()=>setState(()=>_mode=_SignUpMode.selection), child: const Text('Back')),
+          TextButton(
+            onPressed: ()=>setState(()=>_mode=_SignUpMode.selection),
+            child: const Text('Back'),
+          ),
         ],
       ),
     );
