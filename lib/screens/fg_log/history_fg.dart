@@ -8,13 +8,17 @@ import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+// jadi:
+import '../collage_page.dart';
+
+
 class HistoryFGPage extends StatelessWidget {
   const HistoryFGPage({Key? key}) : super(key: key);
 
-  // Ganti dengan API key Drive-mu & pastikan folder-mu share→“Anyone with link”→Viewer
+  // API key Drive kamu
   static const _apiKey = 'AIzaSyC_vPd6yPwYQ60Pn-tuR3Nly_7mgXZcxGk';
 
-  /// Ekstrak ID dari share link (file atau folder)
+  /// Ekstrak ID dari link Drive (file atau folder)
   String? _extractDriveId(String link) {
     final m1 = RegExp(r'/d/([^/]+)').firstMatch(link);
     if (m1 != null) return m1.group(1);
@@ -23,45 +27,33 @@ class HistoryFGPage extends StatelessWidget {
     return null;
   }
 
-  /// Tarik thumbnail pertama di folder
-  Future<String?> _fetchThumbnail(String driveLink) async {
-  try {
-    final folderId = _extractDriveId(driveLink);
-    if (folderId == null) return null;
+  /// Tarik semua URL image di folder publik
+  Future<List<String>> _fetchAllImageUrls(String folderUrl) async {
+    final folderId = _extractDriveId(folderUrl);
+    if (folderId == null) throw 'Invalid Drive link';
 
     final uri = Uri.https(
       'www.googleapis.com',
       '/drive/v3/files',
       {
         'q': "'$folderId' in parents and mimeType contains 'image/'",
-        'orderBy': 'createdTime desc',
-        'pageSize': '1',
-
-        // ← tambahan corpus agar API key bisa akses item publik:
-        'corpora'                 : 'allDrives',
-        'supportsAllDrives'       : 'true',
+        'fields': 'files(id)',
+        'key': _apiKey,
+        'corpora': 'allDrives',
+        'supportsAllDrives': 'true',
         'includeItemsFromAllDrives': 'true',
-
-        'fields': 'files(thumbnailLink)',
-        'key'   : _apiKey,
       },
     );
 
     final resp = await http.get(uri);
-    if (resp.statusCode != 200) {
-      debugPrint('Thumbnail fetch gagal: ${resp.statusCode}');
-      return null;
-    }
-    final data = json.decode(resp.body) as Map<String, dynamic>;
-    final files = data['files'] as List<dynamic>? ?? [];
-    if (files.isEmpty) return null;
-    return (files.first as Map<String, dynamic>)['thumbnailLink'] as String?;
-  } catch (e) {
-    debugPrint('Thumbnail exception: $e');
-    return null;
-  }
-}
+    if (resp.statusCode != 200) throw 'Drive API error ${resp.statusCode}';
 
+    final data = json.decode(resp.body) as Map<String, dynamic>;
+    final files = (data['files'] as List).cast<Map<String, dynamic>>();
+    return files
+        .map((f) => 'https://drive.google.com/uc?export=view&id=${f['id']}')
+        .toList();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -104,120 +96,125 @@ class HistoryFGPage extends StatelessWidget {
                   ? DateFormat.yMMMd().add_jm().format(ts.toDate())
                   : '';
 
-              return Card(
-                margin: const EdgeInsets.symmetric(vertical: 6),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Row(
-                    children: [
-                      // ── KIRI: Judul, Lokasi, Tanggal, Link ───────────────
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Judul
-                            if (title.isNotEmpty) ...[
-                              Text(
-                                title,
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
+              return InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => CollagePage(folderUrl: link),
+                    ),
+                  );
+                },
+                child: Card(
+                  margin: const EdgeInsets.symmetric(vertical: 6),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Row(
+                      children: [
+                        // KIRI: Judul, Lokasi, Tanggal, Link
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (title.isNotEmpty) ...[
+                                Text(
+                                  title,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
+                                const SizedBox(height: 4),
+                              ],
+                              Text(
+                                location,
+                                style: TextStyle(color: Colors.grey[800]),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
                               const SizedBox(height: 4),
-                            ],
-
-                            // Lokasi
-                            Text(
-                              location,
-                              style: TextStyle(color: Colors.grey[800]),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 4),
-
-                            // Tanggal + waktu dibuat
-                            Text(
-                              '$date • $when',
-                              style: TextStyle(color: Colors.grey[600]),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 8),
-
-                            // Link Google Drive
-                            Row(
-                              children: [
-                                const Icon(Icons.link, size: 20, color: Colors.blue),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: GestureDetector(
-                                    onTap: () async {
-                                      final uri = Uri.parse(link);
-                                      if (await canLaunchUrl(uri)) {
-                                        await launchUrl(
-                                          uri,
-                                          mode: LaunchMode.externalApplication,
-                                        );
-                                      }
-                                    },
-                                    child: Text(
-                                      link,
-                                      style: const TextStyle(
-                                        color: Colors.blue,
-                                        decoration: TextDecoration.underline,
+                              Text(
+                                '$date • $when',
+                                style: TextStyle(color: Colors.grey[600]),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  const Icon(Icons.link, size: 20, color: Colors.blue),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: GestureDetector(
+                                      onTap: () async {
+                                        final uri = Uri.parse(link);
+                                        if (await canLaunchUrl(uri)) {
+                                          await launchUrl(
+                                            uri,
+                                            mode: LaunchMode.externalApplication,
+                                          );
+                                        }
+                                      },
+                                      child: Text(
+                                        link,
+                                        style: const TextStyle(
+                                          color: Colors.blue,
+                                          decoration: TextDecoration.underline,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                       ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      const SizedBox(width: 12),
-
-                      // ── KANAN: Thumbnail (64×64) atau placeholder ────────
-                      SizedBox(
-                        width: 64,
-                        height: 64,
-                        child: FutureBuilder<String?>(
-                          future: _fetchThumbnail(link),
-                          builder: (c, snap2) {
-                            if (snap2.connectionState == ConnectionState.waiting) {
-                              return const Center(
-                                  child: CircularProgressIndicator(strokeWidth: 2));
-                            }
-                            if (snap2.hasError || snap2.data == null) {
-                              return Container(
-                                decoration: BoxDecoration(
-                                  color: Colors.grey[200],
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: const Icon(Icons.image, color: Colors.grey),
-                              );
-                            }
-                            return ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: Image.network(
-                                snap2.data!,
-                                width: 64,
-                                height: 64,
-                                fit: BoxFit.cover,
+                                ],
                               ),
-                            );
-                          },
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
+
+                        const SizedBox(width: 12),
+
+                        // KANAN: Thumbnail (64×64) atau placeholder
+                        SizedBox(
+                          width: 64,
+                          height: 64,
+                          child: FutureBuilder<List<String>>(
+                            future: _fetchAllImageUrls(link),
+                            builder: (c, snap2) {
+                              if (snap2.connectionState == ConnectionState.waiting) {
+                                return const Center(
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                );
+                              }
+                              if (snap2.hasError || snap2.data == null || snap2.data!.isEmpty) {
+                                return Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey[200],
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Icon(Icons.image, color: Colors.grey),
+                                );
+                              }
+                              final thumb = snap2.data!.first;
+                              return ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.network(
+                                  thumb,
+                                  width: 64,
+                                  height: 64,
+                                  fit: BoxFit.cover,
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               );

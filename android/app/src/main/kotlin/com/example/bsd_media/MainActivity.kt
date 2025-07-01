@@ -1,5 +1,6 @@
-package com.example.bsd_media
+package com.bsdmedia.dbmedia
 
 import io.flutter.embedding.android.FlutterActivity
 
-class MainActivity : FlutterActivity()
+class MainActivity: FlutterActivity() {
+}

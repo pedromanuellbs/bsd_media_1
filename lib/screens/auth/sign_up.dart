@@ -21,6 +21,23 @@ class SignUpPage extends StatefulWidget {
   State<SignUpPage> createState() => _SignUpPageState();
 }
 
+// 1) Helper untuk register wajah ke LBPH-backend
+Future<bool> registerFaceLBPH(File faceImage, String userId) async {
+  final uri = Uri.parse('https://backendlbphbsdmedia-production.up.railway.app/register_face');
+  final req = http.MultipartRequest('POST', uri)
+    ..fields['user_id'] = userId
+    ..files.add(await http.MultipartFile.fromPath('image', faceImage.path));
+
+  final resp = await req.send();
+  final body = await resp.stream.bytesToString();
+  if (resp.statusCode == 200) {
+    final jsonResp = json.decode(body);
+    return jsonResp['success'] == true;
+  }
+  return false;
+}
+
+
 class _SignUpPageState extends State<SignUpPage> {
   _SignUpMode _mode = _SignUpMode.selection;
   final _formKey = GlobalKey<FormState>();

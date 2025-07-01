@@ -31,8 +31,11 @@ dependencies:
   path_provider: ^2.0.14
   path: ^1.8.3
 
+  googleapis: ^13.1.0
+  google_sign_in: ^5.0.0
+
   # HTTP & JSON
-  http: ^1.2.0
+  http: ^1.4.0
 
   # Firebase core
   firebase_core: ^3.14.0
