@@ -73,10 +73,10 @@ class _CreateFGFormState extends State<CreateFGForm> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Buat Sesi Foto'),
-        backgroundColor: Colors.deepPurple,
-      ),
+      // appBar: AppBar(
+      //   title: const Text('Buat Sesi Foto'),
+      //   backgroundColor: Colors.deepPurple,
+      // ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Form(

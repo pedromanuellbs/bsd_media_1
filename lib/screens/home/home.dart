@@ -1,27 +1,32 @@
 // screens/home/home.dart
-
 import 'dart:convert';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:async';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:salomon_bottom_bar/salomon_bottom_bar.dart';
-import 'package:video_player/video_player.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../fg_log/create_fg.dart'; // sesuaikan path folder f_glog
+import 'package:http/http.dart' as http;
+import 'package:cached_network_image/cached_network_image.dart';
+
+import '../fg_log/create_fg.dart';
 import '../fg_log/history_fg.dart';
- 
+import 'profile_page.dart'; // pastikan import ini ada di atas
 import 'settings.dart';
 
-class _ShortData {
-  final String assetPath, channelName, title, views, timeAgo, likes, comments;
-  _ShortData({
-    required this.assetPath,
-    required this.channelName,
-    required this.title,
-    required this.views,
-    required this.timeAgo,
-    required this.likes,
-    required this.comments,
+// Data class untuk sesi foto
+class _PhotoSessionFeedData {
+  final String photographerUsername;
+  final String driveFolderUrl;
+  final String photoSessionDate;
+  final List<String> photoUrls;
+  final String sessionTitle;
+  _PhotoSessionFeedData({
+    required this.photographerUsername,
+    required this.driveFolderUrl,
+    required this.photoSessionDate,
+    required this.photoUrls,
+    required this.sessionTitle,
   });
 }
 
@@ -31,81 +36,137 @@ class HomePage extends StatefulWidget {
   _HomePageState createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   int _selectedIndex = 0;
   bool _showEmptyFollowing = false;
   bool _isPhotographer = false;
+  bool _isClient = false;
   late final PageController _pageController;
-  late final List<VideoPlayerController> _controllers;
-  List<_ShortData> _shorts = [];
-  bool _isLoading = true, _showOverlay = false;
-  int _overlayIndex = -1, _currentShortIndex = 0;
+  bool _isLoading = true;
+  List<_PhotoSessionFeedData> _feeds = [];
+
+  // API Key Google Drive (samakan dengan collage_page.dart)
+  static const _apiKey = 'AIzaSyC_vPd6yPwYQ60Pn-tuR3Nly_7mgXZcxGk';
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController();
-    _fetchUserRole();
-    _loadShortsAndInit();
+    _fetchUserRoleAndData();
   }
 
-  Future<void> _fetchUserRole() async {
+  Future<void> _fetchUserRoleAndData() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid != null) {
-      final snap = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .get();
+      final snap = await FirebaseFirestore.instance.collection('users').doc(uid).get();
       final role = snap.data()?['role'] as String?;
-      if (role == 'photographer' && mounted) {
-        setState(() => _isPhotographer = true);
+      setState(() {
+        _isPhotographer = (role == 'photographer');
+        _isClient = (role == 'client');
+      });
+      if (_isClient) {
+        await _loadPhotoSessionsFeed();
       }
+      setState(() {
+        _isLoading = false;
+      });
+    } else {
+      setState(() {
+        _isLoading = false;
+        _isClient = false;
+        _isPhotographer = false;
+      });
     }
   }
 
-  Future<void> _loadShortsAndInit() async {
-    Map<String, dynamic> manifestMap = {};
-    try {
-      manifestMap = json.decode(
-          await DefaultAssetBundle.of(context).loadString('AssetManifest.json'))
-          as Map<String, dynamic>;
-    } catch (_) {}
-    final videoPaths = manifestMap.keys
-        .where((k) => k.startsWith('assets/vids/') && k.endsWith('.mp4'))
-        .toList()
-      ..sort();
+  Future<void> _loadPhotoSessionsFeed() async {
+    setState(() => _isLoading = true);
+    final sessions = await FirebaseFirestore.instance
+        .collection('photo_sessions')
+        .orderBy('createdAt', descending: true)
+        .get();
+    List<_PhotoSessionFeedData> feeds = [];
+    for (var doc in sessions.docs) {
+      final data = doc.data();
+      final driveLink = data['driveLink'] as String? ?? '';
+      final photographerId = data['photographerId'] as String? ?? '';
+      final date = data['date'] as String? ?? '';
+      final sessionTitle = data['title'] as String? ?? '';
+      if (driveLink.isEmpty || photographerId.isEmpty) {
+        continue; // skip sesi tanpa link atau photographer
+      }
 
-    _shorts = videoPaths.map((path) {
-      final name = path.split('/').last.replaceAll('.mp4', '');
-      return _ShortData(
-        assetPath: path,
-        channelName: 'Channel $name',
-        title: 'Short $name',
-        views: '100K views',
-        timeAgo: '1h ago',
-        likes: '10K',
-        comments: '5K',
-      );
+      // Ambil username fotografer dari koleksi users
+      String photographerUsername = 'Fotografer';
+      if (photographerId.isNotEmpty) {
+        final userDoc = await FirebaseFirestore.instance.collection('users').doc(photographerId).get();
+        photographerUsername = userDoc.data()?['username'] ?? 'Fotografer';
+      }
+
+      // Ambil max 5 foto dari Google Drive (pakai thumbnailLink)
+      List<String> photoUrls = [];
+      try {
+        if (driveLink.isNotEmpty) {
+          photoUrls = await _fetchImageUrls(driveLink);
+        }
+      } catch (e) {
+        debugPrint('[ERROR] Gagal load foto dari Google Drive: $e');
+      }
+
+      if (photoUrls.isNotEmpty) {
+        feeds.add(_PhotoSessionFeedData(
+          photographerUsername: photographerUsername,
+          driveFolderUrl: driveLink,
+          photoSessionDate: date,
+          photoUrls: photoUrls.take(5).toList(),
+          sessionTitle: sessionTitle,
+        ));
+      }
+    }
+    setState(() {
+      _feeds = feeds;
+      _isLoading = false;
+    });
+  }
+
+  // Ambil thumbnailLink gambar dari Google Drive
+  Future<List<String>> _fetchImageUrls(String folderUrl) async {
+    final match = RegExp(r'/d/([^/]+)').firstMatch(folderUrl)
+        ?? RegExp(r'[?&]id=([^&]+)').firstMatch(folderUrl)
+        ?? RegExp(r'/folders/([^/?]+)').firstMatch(folderUrl);
+    final folderId = match?.group(1);
+    if (folderId == null) {
+      throw 'Link Drive tidak valid';
+    }
+
+    final uri = Uri.https(
+      'www.googleapis.com',
+      '/drive/v3/files',
+      {
+        'q': "'$folderId' in parents and mimeType contains 'image/'",
+        'fields': 'files(id,name,thumbnailLink)',
+        'key': _apiKey,
+        'pageSize': '5',
+        'orderBy': 'createdTime desc',
+      },
+    );
+    final resp = await http.get(uri);
+    if (resp.statusCode != 200) {
+      throw 'Drive API error ${resp.statusCode}';
+    }
+    final data = json.decode(resp.body) as Map<String, dynamic>;
+    final files = (data['files'] as List).cast<Map<String, dynamic>>();
+    // Pakai thumbnailLink jika ada, fallback ke direct link jika tidak
+    return files.map<String>((f) {
+      if (f['thumbnailLink'] != null) {
+        return f['thumbnailLink'] as String;
+      }
+      return 'https://drive.google.com/uc?export=download&id=${f['id']}';
     }).toList();
-
-    _controllers = _shorts.map((short) {
-      final ctrl = kIsWeb
-          ? VideoPlayerController.network(short.assetPath)
-          : VideoPlayerController.asset(short.assetPath);
-      ctrl.initialize().then((_) {
-        ctrl.setLooping(true);
-        setState(() {});
-      });
-      return ctrl;
-    }).toList();
-
-    if (_controllers.isNotEmpty) _controllers[0].play();
-    setState(() => _isLoading = false);
   }
 
   @override
   void dispose() {
-    for (var c in _controllers) c.dispose();
     _pageController.dispose();
     super.dispose();
   }
@@ -119,31 +180,17 @@ class _HomePageState extends State<HomePage> {
           ? _buildHomeAppBar()
           : AppBar(title: Text(_navTitle(_selectedIndex))),
       body: isHome
-          ? (_showEmptyFollowing
-              ? _buildEmptyFollowing()
-              : _buildShortsFeed())
+          ? (_isClient
+              ? _buildPhotoSessionFeed()
+              : (_showEmptyFollowing
+                  ? _buildEmptyFollowing()
+                  : _buildPlaceholder(_selectedIndex)))
           : _buildPlaceholder(_selectedIndex),
       bottomNavigationBar: SalomonBottomBar(
         currentIndex: _selectedIndex,
         selectedItemColor: const Color(0xff6200ee),
         unselectedItemColor: const Color(0xff757575),
         onTap: (i) {
-          if (i == 1 && _isPhotographer) {
-  Navigator.push(context,
-    MaterialPageRoute(builder: (_) => const HistoryFGPage())
-  );
-  return;
-}
-
-          
-          // jika photographer dan tap item ke-2 (index 2), langsung CreateFGForm
-          if (i == 2 && _isPhotographer) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const CreateFGForm()),
-            );
-            return;
-          }
           setState(() {
             _selectedIndex = i;
             if (i != 0) _showEmptyFollowing = false;
@@ -222,7 +269,7 @@ class _HomePageState extends State<HomePage> {
   String _navTitle(int idx) {
     switch (idx) {
       case 1:
-        return 'Saved';
+        return _isPhotographer ? 'History' : 'Saved';
       case 2:
         return _isPhotographer ? 'Buat Sesi Foto' : 'Search';
       case 3:
@@ -239,12 +286,16 @@ class _HomePageState extends State<HomePage> {
             icon: const Icon(Icons.home),
             title: const Text("Home"),
             selectedColor: Colors.purple),
-        SalomonBottomBarItem(
-  icon: const Icon(Icons.history),
-  title: const Text('History'),
-  selectedColor: Colors.teal,
-)
-,
+        if (_isPhotographer)
+          SalomonBottomBarItem(
+              icon: const Icon(Icons.history),
+              title: const Text('History'),
+              selectedColor: Colors.teal)
+        else if (_isClient)
+          SalomonBottomBarItem(
+              icon: const Icon(Icons.bookmark),
+              title: const Text('Saved'),
+              selectedColor: Colors.teal),
         SalomonBottomBarItem(
           icon: Icon(_isPhotographer ? Icons.add_circle : Icons.search),
           title: Text(_isPhotographer ? "Create" : "Search"),
@@ -268,147 +319,277 @@ class _HomePageState extends State<HomePage> {
         ),
       );
 
-  Widget _buildShortsFeed() {
+  // Feed untuk klien: daftar sesi foto dengan slideshow animasi black fade
+  Widget _buildPhotoSessionFeed() {
     if (_isLoading) return const Center(child: CircularProgressIndicator());
+    if (_feeds.isEmpty) {
+      return const Center(child: Text('Belum ada sesi foto dari fotografer.'));
+    }
     return PageView.builder(
       controller: _pageController,
       scrollDirection: Axis.vertical,
-      itemCount: _shorts.length,
-      onPageChanged: (idx) {
-        _controllers[_currentShortIndex].pause();
-        _currentShortIndex = idx;
-        if (_controllers[idx].value.isInitialized) _controllers[idx].play();
-        setState(() {});
-      },
+      itemCount: _feeds.length,
       itemBuilder: (context, idx) {
-        final short = _shorts[idx];
-        final ctrl = _controllers[idx];
-        return Stack(fit: StackFit.expand, children: [
-          if (ctrl.value.isInitialized)
-            FittedBox(
-              fit: BoxFit.cover,
-              child: SizedBox(
-                width: ctrl.value.size.width,
-                height: ctrl.value.size.height,
-                child: VideoPlayer(ctrl),
-              ),
-            )
-          else
-            const Center(child: CircularProgressIndicator()),
-          if (!kIsWeb)
-            Positioned.fill(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () {
-                  ctrl.value.isPlaying ? ctrl.pause() : ctrl.play();
-                  setState(() {
-                    _overlayIndex = idx;
-                    _showOverlay = true;
-                  });
-                  Future.delayed(const Duration(milliseconds: 500), () {
-                    if (mounted) setState(() => _showOverlay = false);
-                  });
-                },
-              ),
-            ),
-          if (_showOverlay && _overlayIndex == idx)
-            Center(
-              child: AnimatedOpacity(
-                opacity: 1,
-                duration: const Duration(milliseconds: 200),
-                child: Icon(
-                  ctrl.value.isPlaying
-                      ? Icons.pause_circle_filled
-                      : Icons.play_circle_fill,
-                  size: 80,
-                  color: Colors.white.withOpacity(0.8),
-                ),
-              ),
-            ),
-          Positioned(
-            left: 16,
-            right: 100,
-            bottom: 40,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 40,
-                  height: 60,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(8),
-                    image: const DecorationImage(
-                      image: AssetImage('assets/img/dum_prof.jpg'),
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(short.title,
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 4),
-                    Text('${short.views} • ${short.timeAgo}',
-                        style: const TextStyle(
-                            color: Colors.white70, fontSize: 14)),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          Positioned(
-            right: 16,
-            bottom: 40,
-            child: Column(
-              children: [
-                _ActionIcon(icon: Icons.thumb_up, label: short.likes),
-                const SizedBox(height: 24),
-                _ActionIcon(icon: Icons.comment, label: short.comments),
-                const SizedBox(height: 24),
-                _ActionIcon(icon: Icons.share, label: 'Share'),
-                const SizedBox(height: 24),
-                const Icon(Icons.more_vert, color: Colors.white, size: 32),
-              ],
-            ),
-          ),
-        ]);
+        final feed = _feeds[idx];
+        return PhotoSessionSlide(feed: feed);
       },
     );
   }
 
+  // Placeholder jika bukan klien
   Widget _buildPlaceholder(int idx) {
-    switch (idx) {
-      case 1:
+  switch (idx) {
+    case 1:
+      if (_isPhotographer) {
+        return const HistoryFGPage();
+      } else if (_isClient) {
         return const Center(child: Text('Saved'));
-      case 2:
-        return _isPhotographer ? const CreateFGForm() : const Center(child: Text('Search'));
-      case 3:
-        return const Center(child: Text('Profile'));
-      case 4:
-        return const SettingsPage2();
-      default:
-        return const SizedBox.shrink();
-    }
+      }
+      return const SizedBox.shrink();
+    case 2:
+      return _isPhotographer
+          ? const CreateFGForm()
+          : const Center(child: Text('Search'));
+    case 3:
+      // Gabung: tampilkan ProfilePage, fallback ke Text jika error
+      return Builder(
+        builder: (context) {
+          try {
+            return const ProfilePage();
+          } catch (e) {
+            return const Center(child: Text('Profile'));
+          }
+        },
+      );
+    case 4:
+      return const SettingsPage2();
+    default:
+      return const SizedBox.shrink();
+  }
+}
+}
+
+// Widget slideshow animasi black fade per sesi foto
+class PhotoSessionSlide extends StatefulWidget {
+  final _PhotoSessionFeedData feed;
+  const PhotoSessionSlide({Key? key, required this.feed}) : super(key: key);
+
+  @override
+  State<PhotoSessionSlide> createState() => _PhotoSessionSlideState();
+}
+
+class _PhotoSessionSlideState extends State<PhotoSessionSlide> with SingleTickerProviderStateMixin {
+  int _currentIdx = 0;
+  late AnimationController _controller;
+  late Animation<double> _fadeAnim;
+  Timer? _timer;
+  ImageStream? _watermarkStream;
+  ui.Image? _watermarkImage;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 600),
+      vsync: this,
+    );
+    _fadeAnim = Tween(begin: 1.0, end: 0.0).animate(_controller);
+    _startSlideshow();
+    _loadWatermark();
+  }
+
+  void _startSlideshow() {
+    _timer = Timer.periodic(const Duration(seconds: 6), (timer) async {
+      await _controller.forward(from: 0);
+      if (!mounted) return;
+      setState(() {
+        _currentIdx = (_currentIdx + 1) % widget.feed.photoUrls.length;
+      });
+      _controller.reset();
+    });
+  }
+
+  // Memuat watermark logo BSD Media sebagai ui.Image (untuk CustomPaint)
+  void _loadWatermark() async {
+    final provider = AssetImage('assets/logo-bsd-media.png');
+    _watermarkStream = provider.resolve(const ImageConfiguration());
+    _watermarkStream!.addListener(ImageStreamListener((imageInfo, _) {
+      setState(() {
+        _watermarkImage = imageInfo.image;
+      });
+    }));
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _controller.dispose();
+    _watermarkStream?.removeListener(ImageStreamListener((_, __) {}));
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final url = widget.feed.photoUrls[_currentIdx];
+    final photographerName = widget.feed.photographerUsername;
+    final uploadDate = widget.feed.photoSessionDate;
+    // Ambil role klien dari HomePage di atas
+    final _homeState = context.findAncestorStateOfType<_HomePageState>();
+    final isClient = _homeState?._isClient ?? false;
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Container(color: Colors.black), // Background black
+        FadeTransition(
+          opacity: _fadeAnim,
+          child: isClient
+              ? WatermarkedImage(
+                  imageUrl: url,
+                  watermarkImage: _watermarkImage,
+                )
+              : CachedNetworkImage(
+                  imageUrl: url,
+                  fit: BoxFit.cover,
+                  placeholder: (ctx, _) =>
+                      const Center(child: CircularProgressIndicator()),
+                  errorWidget: (ctx, url, error) {
+                    debugPrint(
+                        '[ERROR] Failed to load image: $url\n$error');
+                    return Container(
+                      color: Colors.grey[200],
+                      child: const Icon(Icons.broken_image, color: Colors.grey),
+                    );
+                  },
+                ),
+        ),
+        Positioned(
+          left: 16,
+          bottom: 40,
+          right: 24,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 40, height: 60,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  color: Colors.grey[400],
+                ),
+                child: const Icon(Icons.person, color: Colors.white, size: 30),
+              ),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    photographerName,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    uploadDate,
+                    style: const TextStyle(
+                        color: Colors.white70, fontSize: 14),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 }
 
-class _ActionIcon extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  const _ActionIcon({Key? key, required this.icon, required this.label}) : super(key: key);
+// Widget untuk melapisi network image dengan watermark di tengah (besar, transparan)
+class WatermarkedImage extends StatelessWidget {
+  final String imageUrl;
+  final ui.Image? watermarkImage;
+
+  const WatermarkedImage({
+    Key? key,
+    required this.imageUrl,
+    required this.watermarkImage,
+  }) : super(key: key);
 
   @override
-  Widget build(BuildContext context) => Column(
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (context, box) {
+      return Stack(
+        fit: StackFit.expand,
         children: [
-          Icon(icon, color: Colors.white, size: 32),
-          const SizedBox(height: 4),
-          Text(label, style: const TextStyle(color: Colors.white, fontSize: 12)),
+          // Base image (Google Drive)
+          CachedNetworkImage(
+            imageUrl: imageUrl,
+            fit: BoxFit.cover,
+            placeholder: (ctx, _) =>
+                const Center(child: CircularProgressIndicator()),
+            errorWidget: (ctx, url, error) {
+              debugPrint('[ERROR] Failed to load image: $url\n$error');
+              return Container(
+                color: Colors.grey[200],
+                child: const Icon(Icons.broken_image, color: Colors.grey),
+              );
+            },
+          ),
+          // Watermark overlay (center, besar, transparan 65%)
+          if (watermarkImage != null)
+            IgnorePointer(
+              child: CustomPaint(
+                size: Size(box.maxWidth, box.maxHeight),
+                painter: WatermarkPainter(
+                  watermarkImage!,
+                  opacity: 0.65,
+                ),
+              ),
+            ),
         ],
       );
+    });
+  }
+}
+
+class WatermarkPainter extends CustomPainter {
+  final ui.Image watermark;
+  final double opacity;
+
+  WatermarkPainter(this.watermark, {this.opacity = 0.65});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Color.fromARGB((255 * opacity).toInt(), 255, 255, 255)
+      ..filterQuality = FilterQuality.high
+      ..isAntiAlias = true;
+
+    // Ukuran watermark: sekitar 45% lebar layar (besar, center)
+    final double watermarkWidth = size.width * 0.85;
+    final double scale = watermarkWidth / watermark.width;
+    final double watermarkHeight = watermark.height * scale;
+
+    final Offset center = Offset(
+      (size.width - watermarkWidth) / 2,
+      (size.height - watermarkHeight) / 2,
+    );
+
+    paint.color = paint.color.withOpacity(opacity);
+
+    canvas.saveLayer(Rect.fromLTWH(0, 0, size.width, size.height), Paint());
+    canvas.drawImageRect(
+      watermark,
+      Rect.fromLTWH(0, 0, watermark.width.toDouble(), watermark.height.toDouble()),
+      Rect.fromLTWH(center.dx, center.dy, watermarkWidth, watermarkHeight),
+      paint,
+    );
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant WatermarkPainter oldDelegate) =>
+      watermark != oldDelegate.watermark || opacity != oldDelegate.opacity;
 }

@@ -15,21 +15,20 @@ import 'dart:convert';
 
 enum _SignUpMode { selection, client, photographer }
 
-class SignUpPage extends StatefulWidget {
-  const SignUpPage({Key? key}) : super(key: key);
-  @override
-  State<SignUpPage> createState() => _SignUpPageState();
-}
-
 // 1) Helper untuk register wajah ke LBPH-backend
 Future<bool> registerFaceLBPH(File faceImage, String userId) async {
+  print('DEBUG: file path: ${faceImage.path}, exists: ${await faceImage.exists()}, length: ${await faceImage.length()}');
+
   final uri = Uri.parse('https://backendlbphbsdmedia-production.up.railway.app/register_face');
   final req = http.MultipartRequest('POST', uri)
     ..fields['user_id'] = userId
-    ..files.add(await http.MultipartFile.fromPath('image', faceImage.path));
+    ..files.add(await http.MultipartFile.fromPath('image', faceImage.path)); // pastikan 'image' sesuai dengan backend
 
   final resp = await req.send();
   final body = await resp.stream.bytesToString();
+
+  print('DEBUG: status=${resp.statusCode}, body=$body');
+
   if (resp.statusCode == 200) {
     final jsonResp = json.decode(body);
     return jsonResp['success'] == true;
@@ -37,11 +36,60 @@ Future<bool> registerFaceLBPH(File faceImage, String userId) async {
   return false;
 }
 
+// === Tambahkan class Photographer untuk database Firebase ===
+class Photographer {
+  final String id;
+  final String username;
+  final String nama;
+  final String email;
+  final String qrisUrl;
+  final String role;
+  final Timestamp? createdAt;
+
+  Photographer({
+    required this.id,
+    required this.username,
+    required this.nama,
+    required this.email,
+    required this.qrisUrl,
+    this.role = 'photographer',
+    this.createdAt,
+  });
+
+  Map<String, dynamic> toMap() => {
+        'username': username,
+        'nama': nama,
+        'email': email,
+        'qrisUrl': qrisUrl,
+        'role': role,
+        'createdAt': createdAt ?? FieldValue.serverTimestamp(),
+      };
+
+  factory Photographer.fromDoc(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    return Photographer(
+      id: doc.id,
+      username: data['username'] ?? '',
+      nama: data['nama'] ?? '',
+      email: data['email'] ?? '',
+      qrisUrl: data['qrisUrl'] ?? '',
+      role: data['role'] ?? 'photographer',
+      createdAt: data['createdAt'],
+    );
+  }
+}
+
+class SignUpPage extends StatefulWidget {
+  const SignUpPage({Key? key}) : super(key: key);
+  @override
+  State<SignUpPage> createState() => _SignUpPageState();
+}
 
 class _SignUpPageState extends State<SignUpPage> {
   _SignUpMode _mode = _SignUpMode.selection;
   final _formKey = GlobalKey<FormState>();
   final _uC = TextEditingController();
+  final _namaC = TextEditingController(); // Controller untuk Nama Fotografer
   final _eC = TextEditingController();
   final _pC = TextEditingController();
   final _cC = TextEditingController();
@@ -52,6 +100,7 @@ class _SignUpPageState extends State<SignUpPage> {
   @override
   void dispose() {
     _uC.dispose();
+    _namaC.dispose();
     _eC.dispose();
     _pC.dispose();
     _cC.dispose();
@@ -84,24 +133,6 @@ class _SignUpPageState extends State<SignUpPage> {
         ],
       ),
     );
-  }
-
-  Future<bool> registerFaceLBPH(File faceImage, String userId) async {
-    try {
-      final req = http.MultipartRequest(
-        'POST',
-        Uri.parse('https://backendlbphbsdmedia-production.up.railway.app/'), // <-- Ganti ke URL backend LBPH kamu
-      );
-      req.fields['user_id'] = userId;
-      req.files.add(await http.MultipartFile.fromPath('image', faceImage.path));
-      final resp = await req.send();
-      final respStr = await resp.stream.bytesToString();
-      final result = json.decode(respStr);
-      return result['success'] == true;
-    } catch (e) {
-      debugPrint("Register Face error: $e");
-      return false;
-    }
   }
 
   Widget _buildModeSelection() {
@@ -173,7 +204,7 @@ class _SignUpPageState extends State<SignUpPage> {
                   labelText: 'Konfirmasi Password',
                   suffixIcon: IconButton(
                     icon: Icon(_cpwVis?Icons.visibility_off:Icons.visibility),
-                    onPressed: ()=> setState(()=>_cpwVis=!_cpwVis),
+                    onPressed: ()=>setState(()=>_cpwVis=!_cpwVis),
                   ),
                 ),
                 validator: (v)=> v!=_pC.text?'Tidak cocok':null,
@@ -182,36 +213,56 @@ class _SignUpPageState extends State<SignUpPage> {
 
               // Face Recognition
               ElevatedButton(
-                onPressed: () async {
-                  final cams = await availableCameras();
-                  final file = await Navigator.push<File?>(
-                    context,
-                    MaterialPageRoute(builder: (_) => FaceCapturePage(camera: cams.first)),
-                  );
-                  if (file != null) {
-                    final userId = _eC.text.trim(); // Biasanya email
-                    final success = await registerFaceLBPH(file, userId);
-                    if (success) {
-                      setState(() {
-                        _faceRegistered = true;
-                        _faceFile = file;
-                      });
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Registrasi wajah berhasil!')),
-                      );
-                    } else {
-                      setState(() {
-                        _faceRegistered = false;
-                        _faceFile = null;
-                      });
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Registrasi wajah gagal!')),
-                      );
-                    }
-                  }
-                },
+                onPressed: _loading
+                    ? null
+                    : () async {
+                        // SARAN: Pastikan email sudah diisi sebelum registrasi wajah
+                        if (_eC.text.trim().isEmpty) {
+                          _showError("Isi email terlebih dahulu sebelum registrasi wajah.");
+                          return;
+                        }
+
+                        setState(() => _loading = true);
+                        final cams = await availableCameras();
+                        final File? foto = await Navigator.push<File?>(
+                          context,
+                          MaterialPageRoute(builder: (_) => FaceCapturePage(camera: cams.first)),
+                        );
+                        if (foto != null && await foto.exists() && await foto.length() > 0) {
+  final userId = _eC.text.trim();
+  final bool success = await registerFaceLBPH(foto, userId);
+                          setState(() {
+                            _loading = false;
+                            _faceRegistered = success;
+                            _faceFile = success ? foto : null;
+                          });
+                          // SARAN: Tampilkan hasil log ke user jika gagal
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                success
+                                    ? 'Registrasi wajah berhasil!'
+                                    : 'Registrasi wajah gagal! (lihat log untuk detail)',
+                              ),
+                            ),
+                          );
+                        } else {
+  setState(() => _loading = false);
+  _showError("Gagal mengambil foto wajah, coba lagi.");
+}
+                      },
                 style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-                child: Text(_faceRegistered ? 'Wajah sudah teregistrasi' : 'Face Recognition'),
+                child: _loading
+                    ? const SizedBox(
+                        height: 24,
+                        width: 24,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Text(
+                        _faceRegistered
+                            ? 'Wajah sudah teregistrasi'
+                            : 'Face Recognition',
+                      ),
               ),
 
               const SizedBox(height: 8),
@@ -290,9 +341,17 @@ class _SignUpPageState extends State<SignUpPage> {
         padding: const EdgeInsets.all(24),
         shrinkWrap: true,
         children: [
+          // Username Fotografer
           TextFormField(
             controller: _uC,
             decoration: const InputDecoration(labelText: 'Username Fotografer'),
+            validator: (v)=>v==null||v.isEmpty?'Harus diisi':null,
+          ),
+          const SizedBox(height: 12),
+          // === Tambahkan Nama Fotografer ===
+          TextFormField(
+            controller: _namaC,
+            decoration: const InputDecoration(labelText: 'Nama Fotografer'),
             validator: (v)=>v==null||v.isEmpty?'Harus diisi':null,
           ),
           const SizedBox(height: 12),
@@ -378,16 +437,17 @@ class _SignUpPageState extends State<SignUpPage> {
                     password: _pC.text.trim(),
                   );
                 // 2) Simpan di Firestore
+                final photographer = Photographer(
+                  id: cred.user!.uid,
+                  username: _uC.text.trim(),
+                  nama: _namaC.text.trim(),
+                  email: _eC.text.trim(),
+                  qrisUrl: _qrisUrl!,
+                );
                 await FirebaseFirestore.instance
                   .collection('users')
                   .doc(cred.user!.uid)
-                  .set({
-                    'username': _uC.text.trim(),
-                    'email': _eC.text.trim(),
-                    'role': 'photographer',
-                    'qrisUrl': _qrisUrl!,
-                    'createdAt': FieldValue.serverTimestamp(),
-                  });
+                  .set(photographer.toMap());
                 await _showSuccessAndGoLogin();
               } on FirebaseAuthException catch (e) {
                 _showError(e.message ?? 'Gagal registrasi');

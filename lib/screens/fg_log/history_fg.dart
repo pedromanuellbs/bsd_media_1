@@ -60,10 +60,10 @@ class HistoryFGPage extends StatelessWidget {
     final uid = FirebaseAuth.instance.currentUser!.uid;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('History Sesi Foto'),
-        backgroundColor: Colors.deepPurple,
-      ),
+      // appBar: AppBar(
+      //   title: const Text('History Sesi Foto'),
+      //   backgroundColor: Colors.deepPurple,
+      // ),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('photo_sessions')
