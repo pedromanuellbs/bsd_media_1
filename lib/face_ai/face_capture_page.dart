@@ -10,28 +10,24 @@ import 'package:path_provider/path_provider.dart';
 import '../screens/client_log/match_pics.dart';
 
 // Helper function untuk memanggil backend pencari foto
-Future<List<String>> findMatchingPhotos(File faceImage) async {
-  final uri = Uri.parse('https://backendlbphbsdmedia-production.up.railway.app/find_my_photos');
-  try {
-    final req = http.MultipartRequest('POST', uri)
-      ..files.add(await http.MultipartFile.fromPath('image', faceImage.path));
+// Contoh fungsi yang benar:
+Future<List<Map<String, dynamic>>> findMatchingPhotos(File faceFile) async {
+  final url = Uri.parse('https://backendlbphbsdmedia-production.up.railway.app/find_my_photos');
+  var request = http.MultipartRequest('POST', url);
+  request.files.add(
+    await http.MultipartFile.fromPath('image', faceFile.path),
+  );
 
-    final resp = await req.send();
-    final body = await resp.stream.bytesToString();
+  final streamedResponse = await request.send();
+  final response = await http.Response.fromStream(streamedResponse);
 
-    if (resp.statusCode == 200) {
-      final jsonResp = json.decode(body) as Map<String, dynamic>;
-      if (jsonResp['success'] == true && jsonResp['photo_urls'] != null) {
-        // Konversi list dinamis menjadi list string
-        final urls = List<String>.from(jsonResp['photo_urls']);
-        return urls;
-      }
-    }
-  } catch (e) {
-    debugPrint('Error saat mencari foto: $e');
+  if (response.statusCode != 200) {
+    throw Exception('Failed to get matched photos');
   }
-  // Kembalikan list kosong jika gagal
-  return []; 
+
+  final Map<String, dynamic> data = jsonDecode(response.body);
+  final List matchedPhotos = data['matched_photos'] ?? [];
+  return matchedPhotos.cast<Map<String, dynamic>>();
 }
 
 class FaceCapturePage extends StatefulWidget {
@@ -85,21 +81,22 @@ class _FaceCapturePageState extends State<FaceCapturePage> {
     try {
       // 1. Ambil foto
       final XFile raw = await _controller.takePicture();
-      final tmpDir = await getTemporaryDirectory();
-      final savePath = p.join(tmpDir.path, '${DateTime.now().millisecondsSinceEpoch}.jpg');
-      final faceFile = File(savePath);
-      await raw.saveTo(faceFile);
+final tmpDir = await getTemporaryDirectory();
+final savePath = p.join(tmpDir.path, '${DateTime.now().millisecondsSinceEpoch}.jpg');
+await raw.saveTo(savePath); // ini benar
+final faceFile = File(savePath);
+
 
       // 2. Kirim ke Backend untuk dicocokkan (jika role client)
       if (widget.isClient) {
-        final List<String> matchedUrls = await findMatchingPhotos(faceFile);
+  final List<Map<String, dynamic>> matchedPhotos = await findMatchingPhotos(faceFile);
 
         if (mounted) {
-          Navigator.pop(context); // Tutup loading dialog
+    Navigator.pop(context); // Tutup loading dialog
           Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => MatchPicsPage(matchedPhotoUrls: matchedUrls),
+      context,
+      MaterialPageRoute(
+        builder: (_) => MatchPicsPage(matchedPhotos: matchedPhotos),
             ),
           );
         }

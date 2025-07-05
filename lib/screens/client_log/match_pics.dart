@@ -1,15 +1,14 @@
 // screens/client_log/match_pics.dart
-// Ganti seluruh file match_pics.dart dengan ini
-
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 class MatchPicsPage extends StatelessWidget {
-  final List<String> matchedPhotoUrls;
+  // Ambil List of Map dari hasil parsing JSON response backend!
+  final List<Map<String, dynamic>> matchedPhotos;
 
   const MatchPicsPage({
     Key? key,
-    required this.matchedPhotoUrls,
+    required this.matchedPhotos,
   }) : super(key: key);
 
   @override
@@ -18,7 +17,7 @@ class MatchPicsPage extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Hasil Pencocokan'),
       ),
-      body: matchedPhotoUrls.isEmpty
+      body: matchedPhotos.isEmpty
           ? const Center(
               child: Padding(
                 padding: EdgeInsets.all(16.0),
@@ -32,23 +31,31 @@ class MatchPicsPage extends StatelessWidget {
           : GridView.builder(
               padding: const EdgeInsets.all(8.0),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2, // 2 kolom
+                crossAxisCount: 2,
                 crossAxisSpacing: 8.0,
                 mainAxisSpacing: 8.0,
               ),
-              itemCount: matchedPhotoUrls.length,
+              itemCount: matchedPhotos.length,
               itemBuilder: (context, index) {
-                final url = matchedPhotoUrls[index];
-                return GridTile(
-                  child: CachedNetworkImage(
-                    imageUrl: url,
-                    fit: BoxFit.cover,
-                    placeholder: (context, url) => const Center(
-                      child: CircularProgressIndicator(),
+                final photo = matchedPhotos[index];
+                final thumbUrl = photo['thumbnailLink'] ?? photo['webViewLink'] ?? '';
+                return GestureDetector(
+                  onTap: () {
+                    // Bisa preview photo lebih besar, atau buka link
+                    if (photo['webViewLink'] != null) {
+                      // Implementasi open link jika mau
+                    }
+                  },
+                  child: GridTile(
+                    child: CachedNetworkImage(
+                      imageUrl: thumbUrl,
+                      fit: BoxFit.cover,
+                      placeholder: (context, url) => const Center(
+                        child: CircularProgressIndicator(),
+                      ),
+                      errorWidget: (context, url, error) => const Icon(Icons.error),
                     ),
-                    errorWidget: (context, url, error) => const Icon(Icons.error),
                   ),
-
                 );
               },
             ),

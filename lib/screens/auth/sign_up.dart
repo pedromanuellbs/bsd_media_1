@@ -226,7 +226,7 @@ class _SignUpPageState extends State<SignUpPage> {
                         final cams = await availableCameras();
                         final File? foto = await Navigator.push<File?>(
   context,
-  MaterialPageRoute(builder: (_) => FaceCapturePage(camera: cams.first, isClient: false)),
+  MaterialPageRoute(builder: (_) => FaceCapturePage(camera: cams.first, isClient: false)), // <-- INI PERBAIKANNYA
 );
                         if (foto != null && await foto.exists() && await foto.length() > 0) {
   final userId = _eC.text.trim();
