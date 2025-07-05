@@ -1,6 +1,7 @@
 // screens/home/home.dart
 import 'dart:convert';
 import 'dart:async';
+import 'dart:io'; // UBAHAN: Diperlukan untuk handle hasil foto
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:salomon_bottom_bar/salomon_bottom_bar.dart';
@@ -8,11 +9,13 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:camera/camera.dart'; // UBAHAN: Import package camera
 
 import '../fg_log/create_fg.dart';
 import '../fg_log/history_fg.dart';
-import 'profile_page.dart'; // pastikan import ini ada di atas
+import 'profile_page.dart';
 import 'settings.dart';
+import '../../face_ai/face_capture_page.dart'; // UBAHAN: Import halaman face capture
 
 // Data class untuk sesi foto
 class _PhotoSessionFeedData {
@@ -164,6 +167,43 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       return 'https://drive.google.com/uc?export=download&id=${f['id']}';
     }).toList();
   }
+  
+  // UBAHAN: Fungsi untuk navigasi ke halaman face capture
+  Future<void> _navigateToFaceCapture() async {
+    try {
+      // 1. Ambil daftar kamera yang tersedia
+      final cameras = await availableCameras();
+      // 2. Pilih kamera depan jika ada, jika tidak, gunakan kamera pertama
+      final frontCamera = cameras.firstWhere(
+        (camera) => camera.lensDirection == CameraLensDirection.front,
+        orElse: () => cameras.first,
+      );
+
+      // 3. Navigasi ke FaceCapturePage dan tunggu hasilnya (File foto)
+      final result = await Navigator.push<File>(
+  context,
+  MaterialPageRoute(
+    // UBAHAN: Tambahkan parameter isClient
+    builder: (_) => FaceCapturePage(camera: frontCamera, isClient: _isClient),
+  ),
+);
+
+      // 4. (Opsional) Lakukan sesuatu dengan foto yang dikembalikan
+      if (result != null) {
+        // ignore: use_build_context_synchronously
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Foto berhasil diambil: ${result.path}')),
+        );
+        // Di sini Anda bisa melanjutkan logika untuk mencari foto berdasarkan wajah
+      }
+    } catch (e) {
+      debugPrint('Error navigasi ke face capture: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal membuka kamera: $e')),
+      );
+    }
+  }
+
 
   @override
   void dispose() {
@@ -253,16 +293,26 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         ),
       );
 
+  // UBAHAN: Widget ikon dibuat non-const dan ditambahkan GestureDetector
   Widget _buildActionIcons() => Column(
         mainAxisSize: MainAxisSize.min,
-        children: const [
-          Icon(Icons.send, color: Colors.white, size: 28),
-          SizedBox(height: 4),
-          Text('Kirim ke Wajah', style: TextStyle(color: Colors.white70, fontSize: 12)),
-          SizedBox(height: 16),
-          Icon(Icons.camera_alt, color: Colors.white, size: 28),
-          SizedBox(height: 4),
-          Text('Cari Foto Kamu', style: TextStyle(color: Colors.white70, fontSize: 12)),
+        children: [
+          const Icon(Icons.send, color: Colors.white, size: 28),
+          const SizedBox(height: 4),
+          const Text('Kirim ke Wajah', style: TextStyle(color: Colors.white70, fontSize: 12)),
+          const SizedBox(height: 16),
+          // Tambahkan GestureDetector untuk membuat ikon bisa ditekan
+          GestureDetector(
+            onTap: _navigateToFaceCapture, // Panggil fungsi navigasi di sini
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                Icon(Icons.camera_alt, color: Colors.white, size: 28),
+                SizedBox(height: 4),
+                Text('Cari Foto Kamu', style: TextStyle(color: Colors.white70, fontSize: 12)),
+              ],
+            ),
+          ),
         ],
       );
 

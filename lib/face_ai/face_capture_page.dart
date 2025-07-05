@@ -1,23 +1,56 @@
 // face_ai/face_capture_page.dart
+
+import 'dart:convert';
 import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import '../screens/client_log/match_pics.dart';
+
+// Helper function untuk memanggil backend pencari foto
+Future<List<String>> findMatchingPhotos(File faceImage) async {
+  final uri = Uri.parse('https://backendlbphbsdmedia-production.up.railway.app/find_my_photos');
+  try {
+    final req = http.MultipartRequest('POST', uri)
+      ..files.add(await http.MultipartFile.fromPath('image', faceImage.path));
+
+    final resp = await req.send();
+    final body = await resp.stream.bytesToString();
+
+    if (resp.statusCode == 200) {
+      final jsonResp = json.decode(body) as Map<String, dynamic>;
+      if (jsonResp['success'] == true && jsonResp['photo_urls'] != null) {
+        // Konversi list dinamis menjadi list string
+        final urls = List<String>.from(jsonResp['photo_urls']);
+        return urls;
+      }
+    }
+  } catch (e) {
+    debugPrint('Error saat mencari foto: $e');
+  }
+  // Kembalikan list kosong jika gagal
+  return []; 
+}
 
 class FaceCapturePage extends StatefulWidget {
   final CameraDescription camera;
-  const FaceCapturePage({ required this.camera, Key? key }) : super(key: key);
+  final bool isClient;
+
+  const FaceCapturePage({
+    required this.camera,
+    required this.isClient,
+    Key? key,
+  }) : super(key: key);
 
   @override
   State<FaceCapturePage> createState() => _FaceCapturePageState();
 }
 
 class _FaceCapturePageState extends State<FaceCapturePage> {
-  late List<CameraDescription> _cameras;
   late CameraController _controller;
   Future<void>? _initFuture;
-  int _camIndex = 0;
 
   @override
   void initState() {
@@ -26,45 +59,66 @@ class _FaceCapturePageState extends State<FaceCapturePage> {
   }
 
   Future<void> _setupCamera() async {
-    _cameras = await availableCameras();
-    // Cari kamera depan
-    _camIndex = _cameras.indexWhere((c) => c.lensDirection == CameraLensDirection.front);
-    if (_camIndex < 0) _camIndex = 0;
+    final cameras = await availableCameras();
+    int camIndex = cameras.indexWhere((c) => c.lensDirection == CameraLensDirection.front);
+    if (camIndex < 0) camIndex = 0;
 
     _controller = CameraController(
-      _cameras[_camIndex],
+      cameras[camIndex],
       ResolutionPreset.medium,
     );
     _initFuture = _controller.initialize();
-    setState(() {});
+    if (mounted) setState(() {});
   }
 
-  Future<void> _switchCamera() async {
-    if (_cameras.length < 2) return;
-    _camIndex = (_camIndex + 1) % _cameras.length;
-    await _controller.dispose();
-    _controller = CameraController(
-      _cameras[_camIndex],
-      ResolutionPreset.medium,
-    );
-    _initFuture = _controller.initialize();
-    setState(() {});
-  }
-
+  // UBAHAN UTAMA DI FUNGSI INI
   Future<void> _takePicture() async {
+    if (!mounted || !_controller.value.isInitialized) return;
+    
+    // Tampilkan loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
     try {
-      await _initFuture;
-      // ambil gambar
+      // 1. Ambil foto
       final XFile raw = await _controller.takePicture();
-      // simpan ke temp dir
       final tmpDir = await getTemporaryDirectory();
       final savePath = p.join(tmpDir.path, '${DateTime.now().millisecondsSinceEpoch}.jpg');
-      await raw.saveTo(savePath);
-      // kembaliin File, bukan String
-      Navigator.pop(context, File(savePath));
+      final faceFile = File(savePath);
+      await raw.saveTo(faceFile);
+
+      // 2. Kirim ke Backend untuk dicocokkan (jika role client)
+      if (widget.isClient) {
+        final List<String> matchedUrls = await findMatchingPhotos(faceFile);
+
+        if (mounted) {
+          Navigator.pop(context); // Tutup loading dialog
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => MatchPicsPage(matchedPhotoUrls: matchedUrls),
+            ),
+          );
+        }
+      } 
+      // Logika lama untuk registrasi
+      else {
+        if (mounted) {
+          Navigator.pop(context); // Tutup loading dialog
+          Navigator.pop(context, faceFile); // Kembalikan file
+        }
+      }
     } catch (e) {
-      debugPrint('❌ Error ambil foto: $e');
-      Navigator.pop(context, null);
+      debugPrint('❌ Error proses foto: $e');
+      if (mounted) {
+        Navigator.pop(context); // Tutup loading dialog
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Terjadi error saat memproses foto.'))
+        );
+      }
     }
   }
 
@@ -75,38 +129,23 @@ class _FaceCapturePageState extends State<FaceCapturePage> {
   }
 
   @override
-  Widget build(BuildContext ctx) {
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Scan Wajah')),
-      body: _initFuture == null
-          ? const Center(child: CircularProgressIndicator())
-          : FutureBuilder(
-              future: _initFuture,
-              builder: (c, snap) {
-                if (snap.connectionState == ConnectionState.done) {
-                  return CameraPreview(_controller);
-                } else {
-                  return const Center(child: CircularProgressIndicator());
-                }
-              },
-            ),
-      floatingActionButton: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          FloatingActionButton(
-            heroTag: 'switch_cam',
-            onPressed: _switchCamera,
-            tooltip: 'Ganti Kamera',
-            child: const Icon(Icons.cameraswitch),
-          ),
-          const SizedBox(height: 16),
-          FloatingActionButton(
-            heroTag: 'take_pic',
-            onPressed: _takePicture,
-            tooltip: 'Ambil Foto',
-            child: const Icon(Icons.camera_alt),
-          ),
-        ],
+      body: FutureBuilder(
+        future: _initFuture,
+        builder: (c, snap) {
+          if (snap.connectionState == ConnectionState.done) {
+            return CameraPreview(_controller);
+          } else {
+            return const Center(child: CircularProgressIndicator());
+          }
+        },
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _takePicture,
+        tooltip: 'Ambil Foto',
+        child: const Icon(Icons.camera_alt),
       ),
     );
   }
