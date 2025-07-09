@@ -14,6 +14,7 @@ import 'package:camera/camera.dart'; // UBAHAN: Import package camera
 import '../fg_log/create_fg.dart';
 import '../fg_log/history_fg.dart';
 import 'profile_page.dart';
+import 'saved.dart';
 import 'settings.dart';
 import '../../face_ai/face_capture_page.dart'; // UBAHAN: Import halaman face capture
 
@@ -61,7 +62,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   Future<void> _fetchUserRoleAndData() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid != null) {
-      final snap = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      final snap =
+          await FirebaseFirestore.instance.collection('users').doc(uid).get();
       final role = snap.data()?['role'] as String?;
       setState(() {
         _isPhotographer = (role == 'photographer');
@@ -84,10 +86,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
   Future<void> _loadPhotoSessionsFeed() async {
     setState(() => _isLoading = true);
-    final sessions = await FirebaseFirestore.instance
-        .collection('photo_sessions')
-        .orderBy('createdAt', descending: true)
-        .get();
+    final sessions =
+        await FirebaseFirestore.instance
+            .collection('photo_sessions')
+            .orderBy('createdAt', descending: true)
+            .get();
     List<_PhotoSessionFeedData> feeds = [];
     for (var doc in sessions.docs) {
       final data = doc.data();
@@ -102,7 +105,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       // Ambil username fotografer dari koleksi users
       String photographerUsername = 'Fotografer';
       if (photographerId.isNotEmpty) {
-        final userDoc = await FirebaseFirestore.instance.collection('users').doc(photographerId).get();
+        final userDoc =
+            await FirebaseFirestore.instance
+                .collection('users')
+                .doc(photographerId)
+                .get();
         photographerUsername = userDoc.data()?['username'] ?? 'Fotografer';
       }
 
@@ -117,13 +124,15 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       }
 
       if (photoUrls.isNotEmpty) {
-        feeds.add(_PhotoSessionFeedData(
-          photographerUsername: photographerUsername,
-          driveFolderUrl: driveLink,
-          photoSessionDate: date,
-          photoUrls: photoUrls.take(5).toList(),
-          sessionTitle: sessionTitle,
-        ));
+        feeds.add(
+          _PhotoSessionFeedData(
+            photographerUsername: photographerUsername,
+            driveFolderUrl: driveLink,
+            photoSessionDate: date,
+            photoUrls: photoUrls.take(5).toList(),
+            sessionTitle: sessionTitle,
+          ),
+        );
       }
     }
     setState(() {
@@ -134,25 +143,22 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
   // Ambil thumbnailLink gambar dari Google Drive
   Future<List<String>> _fetchImageUrls(String folderUrl) async {
-    final match = RegExp(r'/d/([^/]+)').firstMatch(folderUrl)
-        ?? RegExp(r'[?&]id=([^&]+)').firstMatch(folderUrl)
-        ?? RegExp(r'/folders/([^/?]+)').firstMatch(folderUrl);
+    final match =
+        RegExp(r'/d/([^/]+)').firstMatch(folderUrl) ??
+        RegExp(r'[?&]id=([^&]+)').firstMatch(folderUrl) ??
+        RegExp(r'/folders/([^/?]+)').firstMatch(folderUrl);
     final folderId = match?.group(1);
     if (folderId == null) {
       throw 'Link Drive tidak valid';
     }
 
-    final uri = Uri.https(
-      'www.googleapis.com',
-      '/drive/v3/files',
-      {
-        'q': "'$folderId' in parents and mimeType contains 'image/'",
-        'fields': 'files(id,name,thumbnailLink)',
-        'key': _apiKey,
-        'pageSize': '5',
-        'orderBy': 'createdTime desc',
-      },
-    );
+    final uri = Uri.https('www.googleapis.com', '/drive/v3/files', {
+      'q': "'$folderId' in parents and mimeType contains 'image/'",
+      'fields': 'files(id,name,thumbnailLink)',
+      'key': _apiKey,
+      'pageSize': '5',
+      'orderBy': 'createdTime desc',
+    });
     final resp = await http.get(uri);
     if (resp.statusCode != 200) {
       throw 'Drive API error ${resp.statusCode}';
@@ -167,7 +173,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       return 'https://drive.google.com/uc?export=download&id=${f['id']}';
     }).toList();
   }
-  
+
   // UBAHAN: Fungsi untuk navigasi ke halaman face capture
   Future<void> _navigateToFaceCapture() async {
     try {
@@ -181,12 +187,13 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
       // 3. Navigasi ke FaceCapturePage dan tunggu hasilnya (File foto)
       final result = await Navigator.push<File>(
-  context,
-  MaterialPageRoute(
-    // UBAHAN: Tambahkan parameter isClient
-    builder: (_) => FaceCapturePage(camera: frontCamera, isClient: _isClient),
-  ),
-);
+        context,
+        MaterialPageRoute(
+          // UBAHAN: Tambahkan parameter isClient
+          builder:
+              (_) => FaceCapturePage(camera: frontCamera, isClient: _isClient),
+        ),
+      );
 
       // 4. (Opsional) Lakukan sesuatu dengan foto yang dikembalikan
       if (result != null) {
@@ -198,12 +205,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       }
     } catch (e) {
       debugPrint('Error navigasi ke face capture: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal membuka kamera: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Gagal membuka kamera: $e')));
     }
   }
-
 
   @override
   void dispose() {
@@ -216,16 +222,18 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     final isHome = _selectedIndex == 0;
     return Scaffold(
       extendBodyBehindAppBar: isHome,
-      appBar: isHome
-          ? _buildHomeAppBar()
-          : AppBar(title: Text(_navTitle(_selectedIndex))),
-      body: isHome
-          ? (_isClient
-              ? _buildPhotoSessionFeed()
-              : (_showEmptyFollowing
-                  ? _buildEmptyFollowing()
-                  : _buildPlaceholder(_selectedIndex)))
-          : _buildPlaceholder(_selectedIndex),
+      appBar:
+          isHome
+              ? _buildHomeAppBar()
+              : AppBar(title: Text(_navTitle(_selectedIndex))),
+      body:
+          isHome
+              ? (_isClient
+                  ? _buildPhotoSessionFeed()
+                  : (_showEmptyFollowing
+                      ? _buildEmptyFollowing()
+                      : _buildPlaceholder(_selectedIndex)))
+              : _buildPlaceholder(_selectedIndex),
       bottomNavigationBar: SalomonBottomBar(
         currentIndex: _selectedIndex,
         selectedItemColor: const Color(0xff6200ee),
@@ -242,79 +250,92 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   }
 
   PreferredSizeWidget _buildHomeAppBar() => PreferredSize(
-        preferredSize: const Size.fromHeight(130),
-        child: SafeArea(
-          bottom: false,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(width: 28),
-                _buildFollowFeedToggle(),
-                _buildActionIcons(),
-              ],
+    preferredSize: const Size.fromHeight(130),
+    child: SafeArea(
+      bottom: false,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(width: 28),
+            _buildFollowFeedToggle(),
+            _buildActionIcons(),
+          ],
+        ),
+      ),
+    ),
+  );
+
+  Widget _buildFollowFeedToggle() => Expanded(
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        GestureDetector(
+          onTap: () => setState(() => _showEmptyFollowing = true),
+          child: Text(
+            'Mengikuti',
+            style: TextStyle(
+              color: _showEmptyFollowing ? Colors.white70 : Colors.white,
+              fontSize: 16,
             ),
           ),
         ),
-      );
-
-  Widget _buildFollowFeedToggle() => Expanded(
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            GestureDetector(
-              onTap: () => setState(() => _showEmptyFollowing = true),
-              child: Text('Mengikuti',
-                  style: TextStyle(
-                      color: _showEmptyFollowing ? Colors.white70 : Colors.white,
-                      fontSize: 16)),
-            ),
-            const SizedBox(width: 24),
-            GestureDetector(
-              onTap: () => setState(() => _showEmptyFollowing = false),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('Feed',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold)),
-                  Container(
-                      margin: const EdgeInsets.only(top: 4),
-                      height: 2,
-                      width: 24,
-                      color: Colors.white),
-                ],
+        const SizedBox(width: 24),
+        GestureDetector(
+          onTap: () => setState(() => _showEmptyFollowing = false),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Feed',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-            ),
-          ],
+              Container(
+                margin: const EdgeInsets.only(top: 4),
+                height: 2,
+                width: 24,
+                color: Colors.white,
+              ),
+            ],
+          ),
         ),
-      );
+      ],
+    ),
+  );
 
   // UBAHAN: Widget ikon dibuat non-const dan ditambahkan GestureDetector
   Widget _buildActionIcons() => Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.send, color: Colors.white, size: 28),
-          const SizedBox(height: 4),
-          const Text('Kirim ke Wajah', style: TextStyle(color: Colors.white70, fontSize: 12)),
-          const SizedBox(height: 16),
-          // Tambahkan GestureDetector untuk membuat ikon bisa ditekan
-          GestureDetector(
-            onTap: _navigateToFaceCapture, // Panggil fungsi navigasi di sini
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: const [
-                Icon(Icons.camera_alt, color: Colors.white, size: 28),
-                SizedBox(height: 4),
-                Text('Cari Foto Kamu', style: TextStyle(color: Colors.white70, fontSize: 12)),
-              ],
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      const Icon(Icons.send, color: Colors.white, size: 28),
+      const SizedBox(height: 4),
+      const Text(
+        'Kirim ke Wajah',
+        style: TextStyle(color: Colors.white70, fontSize: 12),
+      ),
+      const SizedBox(height: 16),
+      // Tambahkan GestureDetector untuk membuat ikon bisa ditekan
+      GestureDetector(
+        onTap: _navigateToFaceCapture, // Panggil fungsi navigasi di sini
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            Icon(Icons.camera_alt, color: Colors.white, size: 28),
+            SizedBox(height: 4),
+            Text(
+              'Cari Foto Kamu',
+              style: TextStyle(color: Colors.white70, fontSize: 12),
             ),
-          ),
-        ],
-      );
+          ],
+        ),
+      ),
+    ],
+  );
 
   String _navTitle(int idx) {
     switch (idx) {
@@ -332,42 +353,47 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   }
 
   List<SalomonBottomBarItem> _navItems() => [
-        SalomonBottomBarItem(
-            icon: const Icon(Icons.home),
-            title: const Text("Home"),
-            selectedColor: Colors.purple),
-        if (_isPhotographer)
-          SalomonBottomBarItem(
-              icon: const Icon(Icons.history),
-              title: const Text('History'),
-              selectedColor: Colors.teal)
-        else if (_isClient)
-          SalomonBottomBarItem(
-              icon: const Icon(Icons.bookmark),
-              title: const Text('Saved'),
-              selectedColor: Colors.teal),
-        SalomonBottomBarItem(
-          icon: Icon(_isPhotographer ? Icons.add_circle : Icons.search),
-          title: Text(_isPhotographer ? "Create" : "Search"),
-          selectedColor: _isPhotographer ? Colors.green : Colors.orange,
-        ),
-        SalomonBottomBarItem(
-            icon: const Icon(Icons.person),
-            title: const Text("Profile"),
-            selectedColor: Colors.teal),
-        SalomonBottomBarItem(
-            icon: const Icon(Icons.settings),
-            title: const Text("Settings"),
-            selectedColor: Colors.grey),
-      ];
+    SalomonBottomBarItem(
+      icon: const Icon(Icons.home),
+      title: const Text("Home"),
+      selectedColor: Colors.purple,
+    ),
+    if (_isPhotographer)
+      SalomonBottomBarItem(
+        icon: const Icon(Icons.history),
+        title: const Text('History'),
+        selectedColor: Colors.teal,
+      )
+    else if (_isClient)
+      SalomonBottomBarItem(
+        icon: const Icon(Icons.bookmark),
+        title: const Text('Saved'),
+        selectedColor: Colors.teal,
+      ),
+    SalomonBottomBarItem(
+      icon: Icon(_isPhotographer ? Icons.add_circle : Icons.search),
+      title: Text(_isPhotographer ? "Create" : "Search"),
+      selectedColor: _isPhotographer ? Colors.green : Colors.orange,
+    ),
+    SalomonBottomBarItem(
+      icon: const Icon(Icons.person),
+      title: const Text("Profile"),
+      selectedColor: Colors.teal,
+    ),
+    SalomonBottomBarItem(
+      icon: const Icon(Icons.settings),
+      title: const Text("Settings"),
+      selectedColor: Colors.grey,
+    ),
+  ];
 
   Widget _buildEmptyFollowing() => const Center(
-        child: Text(
-          'Kamu belum follow fotografer siapapun.',
-          style: TextStyle(color: Colors.black, fontSize: 18),
-          textAlign: TextAlign.center,
-        ),
-      );
+    child: Text(
+      'Kamu belum follow fotografer siapapun.',
+      style: TextStyle(color: Colors.black, fontSize: 18),
+      textAlign: TextAlign.center,
+    ),
+  );
 
   // Feed untuk klien: daftar sesi foto dengan slideshow animasi black fade
   Widget _buildPhotoSessionFeed() {
@@ -388,35 +414,37 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
   // Placeholder jika bukan klien
   Widget _buildPlaceholder(int idx) {
-  switch (idx) {
-    case 1:
-      if (_isPhotographer) {
-        return const HistoryFGPage();
-      } else if (_isClient) {
-        return const Center(child: Text('Saved'));
-      }
-      return const SizedBox.shrink();
-    case 2:
-      return _isPhotographer
-          ? const CreateFGForm()
-          : const Center(child: Text('Search'));
-    case 3:
-      // Gabung: tampilkan ProfilePage, fallback ke Text jika error
-      return Builder(
-        builder: (context) {
-          try {
-            return const ProfilePage();
-          } catch (e) {
-            return const Center(child: Text('Profile'));
-          }
-        },
-      );
-    case 4:
-      return const SettingsPage2();
-    default:
-      return const SizedBox.shrink();
+    switch (idx) {
+      case 1:
+        if (_isPhotographer) {
+          return const HistoryFGPage();
+        } else if (_isClient) {
+          return const SavedPage(); // << Ganti '=' menjadi 'return'
+        } else {
+          return const SizedBox.shrink(); // << Ganti '=' menjadi 'return'
+        }
+      // 'break' tidak diperlukan lagi karena semua jalur sudah 'return'
+      case 2:
+        return _isPhotographer
+            ? const CreateFGForm()
+            : const Center(child: Text('Search'));
+      case 3:
+        // Gabung: tampilkan ProfilePage, fallback ke Text jika error
+        return Builder(
+          builder: (context) {
+            try {
+              return const ProfilePage();
+            } catch (e) {
+              return const Center(child: Text('Profile'));
+            }
+          },
+        );
+      case 4:
+        return const SettingsPage2();
+      default:
+        return const SizedBox.shrink();
+    }
   }
-}
 }
 
 // Widget slideshow animasi black fade per sesi foto
@@ -428,7 +456,8 @@ class PhotoSessionSlide extends StatefulWidget {
   State<PhotoSessionSlide> createState() => _PhotoSessionSlideState();
 }
 
-class _PhotoSessionSlideState extends State<PhotoSessionSlide> with SingleTickerProviderStateMixin {
+class _PhotoSessionSlideState extends State<PhotoSessionSlide>
+    with SingleTickerProviderStateMixin {
   int _currentIdx = 0;
   late AnimationController _controller;
   late Animation<double> _fadeAnim;
@@ -463,11 +492,13 @@ class _PhotoSessionSlideState extends State<PhotoSessionSlide> with SingleTicker
   void _loadWatermark() async {
     final provider = AssetImage('assets/logo-bsd-media.png');
     _watermarkStream = provider.resolve(const ImageConfiguration());
-    _watermarkStream!.addListener(ImageStreamListener((imageInfo, _) {
-      setState(() {
-        _watermarkImage = imageInfo.image;
-      });
-    }));
+    _watermarkStream!.addListener(
+      ImageStreamListener((imageInfo, _) {
+        setState(() {
+          _watermarkImage = imageInfo.image;
+        });
+      }),
+    );
   }
 
   @override
@@ -493,25 +524,29 @@ class _PhotoSessionSlideState extends State<PhotoSessionSlide> with SingleTicker
         Container(color: Colors.black), // Background black
         FadeTransition(
           opacity: _fadeAnim,
-          child: isClient
-              ? WatermarkedImage(
-                  imageUrl: url,
-                  watermarkImage: _watermarkImage,
-                )
-              : CachedNetworkImage(
-                  imageUrl: url,
-                  fit: BoxFit.cover,
-                  placeholder: (ctx, _) =>
-                      const Center(child: CircularProgressIndicator()),
-                  errorWidget: (ctx, url, error) {
-                    debugPrint(
-                        '[ERROR] Failed to load image: $url\n$error');
-                    return Container(
-                      color: Colors.grey[200],
-                      child: const Icon(Icons.broken_image, color: Colors.grey),
-                    );
-                  },
-                ),
+          child:
+              isClient
+                  ? WatermarkedImage(
+                    imageUrl: url,
+                    watermarkImage: _watermarkImage,
+                  )
+                  : CachedNetworkImage(
+                    imageUrl: url,
+                    fit: BoxFit.cover,
+                    placeholder:
+                        (ctx, _) =>
+                            const Center(child: CircularProgressIndicator()),
+                    errorWidget: (ctx, url, error) {
+                      debugPrint('[ERROR] Failed to load image: $url\n$error');
+                      return Container(
+                        color: Colors.grey[200],
+                        child: const Icon(
+                          Icons.broken_image,
+                          color: Colors.grey,
+                        ),
+                      );
+                    },
+                  ),
         ),
         Positioned(
           left: 16,
@@ -521,7 +556,8 @@ class _PhotoSessionSlideState extends State<PhotoSessionSlide> with SingleTicker
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                width: 40, height: 60,
+                width: 40,
+                height: 60,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(8),
                   color: Colors.grey[400],
@@ -536,15 +572,15 @@ class _PhotoSessionSlideState extends State<PhotoSessionSlide> with SingleTicker
                   Text(
                     photographerName,
                     style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold),
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     uploadDate,
-                    style: const TextStyle(
-                        color: Colors.white70, fontSize: 14),
+                    style: const TextStyle(color: Colors.white70, fontSize: 14),
                   ),
                 ],
               ),
@@ -569,38 +605,37 @@ class WatermarkedImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(builder: (context, box) {
-      return Stack(
-        fit: StackFit.expand,
-        children: [
-          // Base image (Google Drive)
-          CachedNetworkImage(
-            imageUrl: imageUrl,
-            fit: BoxFit.cover,
-            placeholder: (ctx, _) =>
-                const Center(child: CircularProgressIndicator()),
-            errorWidget: (ctx, url, error) {
-              debugPrint('[ERROR] Failed to load image: $url\n$error');
-              return Container(
-                color: Colors.grey[200],
-                child: const Icon(Icons.broken_image, color: Colors.grey),
-              );
-            },
-          ),
-          // Watermark overlay (center, besar, transparan 65%)
-          if (watermarkImage != null)
-            IgnorePointer(
-              child: CustomPaint(
-                size: Size(box.maxWidth, box.maxHeight),
-                painter: WatermarkPainter(
-                  watermarkImage!,
-                  opacity: 0.65,
+    return LayoutBuilder(
+      builder: (context, box) {
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            // Base image (Google Drive)
+            CachedNetworkImage(
+              imageUrl: imageUrl,
+              fit: BoxFit.cover,
+              placeholder:
+                  (ctx, _) => const Center(child: CircularProgressIndicator()),
+              errorWidget: (ctx, url, error) {
+                debugPrint('[ERROR] Failed to load image: $url\n$error');
+                return Container(
+                  color: Colors.grey[200],
+                  child: const Icon(Icons.broken_image, color: Colors.grey),
+                );
+              },
+            ),
+            // Watermark overlay (center, besar, transparan 65%)
+            if (watermarkImage != null)
+              IgnorePointer(
+                child: CustomPaint(
+                  size: Size(box.maxWidth, box.maxHeight),
+                  painter: WatermarkPainter(watermarkImage!, opacity: 0.65),
                 ),
               ),
-            ),
-        ],
-      );
-    });
+          ],
+        );
+      },
+    );
   }
 }
 
@@ -612,10 +647,11 @@ class WatermarkPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Color.fromARGB((255 * opacity).toInt(), 255, 255, 255)
-      ..filterQuality = FilterQuality.high
-      ..isAntiAlias = true;
+    final paint =
+        Paint()
+          ..color = Color.fromARGB((255 * opacity).toInt(), 255, 255, 255)
+          ..filterQuality = FilterQuality.high
+          ..isAntiAlias = true;
 
     // Ukuran watermark: sekitar 45% lebar layar (besar, center)
     final double watermarkWidth = size.width * 0.85;
@@ -632,7 +668,12 @@ class WatermarkPainter extends CustomPainter {
     canvas.saveLayer(Rect.fromLTWH(0, 0, size.width, size.height), Paint());
     canvas.drawImageRect(
       watermark,
-      Rect.fromLTWH(0, 0, watermark.width.toDouble(), watermark.height.toDouble()),
+      Rect.fromLTWH(
+        0,
+        0,
+        watermark.width.toDouble(),
+        watermark.height.toDouble(),
+      ),
       Rect.fromLTWH(center.dx, center.dy, watermarkWidth, watermarkHeight),
       paint,
     );

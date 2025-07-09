@@ -17,12 +17,19 @@ enum _SignUpMode { selection, client, photographer }
 
 // 1) Helper untuk register wajah ke LBPH-backend
 Future<bool> registerFaceLBPH(File faceImage, String userId) async {
-  print('DEBUG: file path: ${faceImage.path}, exists: ${await faceImage.exists()}, length: ${await faceImage.length()}');
+  print(
+    'DEBUG: file path: ${faceImage.path}, exists: ${await faceImage.exists()}, length: ${await faceImage.length()}',
+  );
 
-  final uri = Uri.parse('https://backendlbphbsdmedia-production.up.railway.app/register_face');
-  final req = http.MultipartRequest('POST', uri)
-    ..fields['user_id'] = userId
-    ..files.add(await http.MultipartFile.fromPath('image', faceImage.path)); // pastikan 'image' sesuai dengan backend
+  final uri = Uri.parse(
+    'https://backendlbphbsdmedia-production.up.railway.app/register_face',
+  );
+  final req =
+      http.MultipartRequest('POST', uri)
+        ..fields['user_id'] = userId
+        ..files.add(
+          await http.MultipartFile.fromPath('image', faceImage.path),
+        ); // pastikan 'image' sesuai dengan backend
 
   final resp = await req.send();
   final body = await resp.stream.bytesToString();
@@ -57,13 +64,13 @@ class Photographer {
   });
 
   Map<String, dynamic> toMap() => {
-        'username': username,
-        'nama': nama,
-        'email': email,
-        'qrisUrl': qrisUrl,
-        'role': role,
-        'createdAt': createdAt ?? FieldValue.serverTimestamp(),
-      };
+    'username': username,
+    'nama': nama,
+    'email': email,
+    'qrisUrl': qrisUrl,
+    'role': role,
+    'createdAt': createdAt ?? FieldValue.serverTimestamp(),
+  };
 
   factory Photographer.fromDoc(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
@@ -110,28 +117,39 @@ class _SignUpPageState extends State<SignUpPage> {
   Future<void> _showSuccessAndGoLogin() async {
     await showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Registrasi Berhasil'),
-        content: const Text('Silakan login dengan akun Anda.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK')),
-        ],
-      ),
+      builder:
+          (_) => AlertDialog(
+            title: const Text('Registrasi Berhasil'),
+            content: const Text('Silakan login dengan akun Anda.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
     );
     if (!mounted) return;
-    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const SignInPage()));
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const SignInPage()),
+    );
   }
 
   void _showError(String msg) {
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Error'),
-        content: Text(msg),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK'))
-        ],
-      ),
+      builder:
+          (_) => AlertDialog(
+            title: const Text('Error'),
+            content: Text(msg),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
     );
   }
 
@@ -139,29 +157,64 @@ class _SignUpPageState extends State<SignUpPage> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Text('Kamu adalah?', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        const Text(
+          'Kamu adalah?',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
         const SizedBox(height: 16),
-        ElevatedButton(
-          onPressed: () => setState(() { _mode = _SignUpMode.client; _agreedEula = false; }),
-          style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-          child: const Text('Klien'),
+        // --- PERUBAHAN: Gunakan Row untuk tombol Klien dan Fotografer ---
+        Row(
+          children: [
+            Expanded(
+              child: ElevatedButton(
+                onPressed:
+                    () => setState(() {
+                      _mode = _SignUpMode.client;
+                      _agreedEula = false;
+                    }),
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size(
+                    0,
+                    48,
+                  ), // Lebar 0 agar Expanded bekerja
+                ),
+                child: const Text('Klien'),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: ElevatedButton(
+                onPressed:
+                    () => setState(() => _mode = _SignUpMode.photographer),
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size(
+                    0,
+                    48,
+                  ), // Lebar 0 agar Expanded bekerja
+                ),
+                child: const Text('Fotografer'),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 8),
+        // Tombol Kembali tetap di bawah
         ElevatedButton(
-          onPressed: () => setState(() => _mode = _SignUpMode.photographer),
-          style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-          child: const Text('Fotografer'),
-        ),
-        const SizedBox(height: 8),
-        ElevatedButton(
-          onPressed: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const SignInPage())),
-          style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+          onPressed:
+              () => Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => const SignInPage()),
+              ),
+          style: ElevatedButton.styleFrom(
+            minimumSize: const Size.fromHeight(48),
+          ),
           child: const Text('Kembali'),
         ),
       ],
     );
   }
-  String? _qrisUrl;  
+
+  String? _qrisUrl;
 
   Widget _clientForm() {
     return Stack(
@@ -175,13 +228,13 @@ class _SignUpPageState extends State<SignUpPage> {
               TextFormField(
                 controller: _uC,
                 decoration: const InputDecoration(labelText: 'Username'),
-                validator: (v) => v==null||v.isEmpty?'Harus diisi':null,
+                validator: (v) => v == null || v.isEmpty ? 'Harus diisi' : null,
               ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _eC,
                 decoration: const InputDecoration(labelText: 'Email'),
-                validator: (v) => v==null||v.isEmpty?'Harus diisi':null,
+                validator: (v) => v == null || v.isEmpty ? 'Harus diisi' : null,
               ),
               const SizedBox(height: 12),
               TextFormField(
@@ -190,11 +243,14 @@ class _SignUpPageState extends State<SignUpPage> {
                 decoration: InputDecoration(
                   labelText: 'Password',
                   suffixIcon: IconButton(
-                    icon: Icon(_pwVis?Icons.visibility_off:Icons.visibility),
-                    onPressed: ()=> setState(()=>_pwVis=!_pwVis),
+                    icon: Icon(
+                      _pwVis ? Icons.visibility_off : Icons.visibility,
+                    ),
+                    onPressed: () => setState(() => _pwVis = !_pwVis),
                   ),
                 ),
-                validator: (v)=> v==null||v.length<6?'Min 6 karakter':null,
+                validator:
+                    (v) => v == null || v.length < 6 ? 'Min 6 karakter' : null,
               ),
               const SizedBox(height: 12),
               TextFormField(
@@ -203,97 +259,138 @@ class _SignUpPageState extends State<SignUpPage> {
                 decoration: InputDecoration(
                   labelText: 'Konfirmasi Password',
                   suffixIcon: IconButton(
-                    icon: Icon(_cpwVis?Icons.visibility_off:Icons.visibility),
-                    onPressed: ()=>setState(()=>_cpwVis=!_cpwVis),
+                    icon: Icon(
+                      _cpwVis ? Icons.visibility_off : Icons.visibility,
+                    ),
+                    onPressed: () => setState(() => _cpwVis = !_cpwVis),
                   ),
                 ),
-                validator: (v)=> v!=_pC.text?'Tidak cocok':null,
+                validator: (v) => v != _pC.text ? 'Tidak cocok' : null,
               ),
               const SizedBox(height: 16),
 
               // Face Recognition
               ElevatedButton(
-                onPressed: _loading
-                    ? null
-                    : () async {
-                        // SARAN: Pastikan email sudah diisi sebelum registrasi wajah
-                        if (_eC.text.trim().isEmpty) {
-                          _showError("Isi email terlebih dahulu sebelum registrasi wajah.");
-                          return;
-                        }
+                onPressed:
+                    _loading
+                        ? null
+                        : () async {
+                          // SARAN: Pastikan email sudah diisi sebelum registrasi wajah
+                          if (_eC.text.trim().isEmpty) {
+                            _showError(
+                              "Isi email terlebih dahulu sebelum registrasi wajah.",
+                            );
+                            return;
+                          }
 
-                        setState(() => _loading = true);
-                        final cams = await availableCameras();
-                        final File? foto = await Navigator.push<File?>(
-  context,
-  MaterialPageRoute(builder: (_) => FaceCapturePage(camera: cams.first, isClient: false)), // <-- INI PERBAIKANNYA
-);
-                        if (foto != null && await foto.exists() && await foto.length() > 0) {
-  final userId = _eC.text.trim();
-  final bool success = await registerFaceLBPH(foto, userId);
-                          setState(() {
-                            _loading = false;
-                            _faceRegistered = success;
-                            _faceFile = success ? foto : null;
-                          });
-                          // SARAN: Tampilkan hasil log ke user jika gagal
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                success
-                                    ? 'Registrasi wajah berhasil!'
-                                    : 'Registrasi wajah gagal! (lihat log untuk detail)',
-                              ),
-                            ),
+                          setState(() => _loading = true);
+                          final cams = await availableCameras();
+                          final File? foto = await Navigator.push<File?>(
+                            context,
+                            MaterialPageRoute(
+                              builder:
+                                  (_) => FaceCapturePage(
+                                    camera: cams.first,
+                                    isClient: false,
+                                  ),
+                            ), // <-- INI PERBAIKANNYA
                           );
-                        } else {
-  setState(() => _loading = false);
-  _showError("Gagal mengambil foto wajah, coba lagi.");
-}
-                      },
-                style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-                child: _loading
-                    ? const SizedBox(
-                        height: 24,
-                        width: 24,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Text(
-                        _faceRegistered
-                            ? 'Wajah sudah teregistrasi'
-                            : 'Face Recognition',
-                      ),
+                          if (foto != null &&
+                              await foto.exists() &&
+                              await foto.length() > 0) {
+                            final userId = _eC.text.trim();
+                            final bool success = await registerFaceLBPH(
+                              foto,
+                              userId,
+                            );
+                            setState(() {
+                              _loading = false;
+                              _faceRegistered = success;
+                              _faceFile = success ? foto : null;
+                            });
+                            // SARAN: Tampilkan hasil log ke user jika gagal
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  success
+                                      ? 'Registrasi wajah berhasil!'
+                                      : 'Registrasi wajah gagal! (lihat log untuk detail)',
+                                ),
+                              ),
+                            );
+                          } else {
+                            setState(() => _loading = false);
+                            _showError(
+                              "Gagal mengambil foto wajah, coba lagi.",
+                            );
+                          }
+                        },
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
+                ),
+                child:
+                    _loading
+                        ? const SizedBox(
+                          height: 24,
+                          width: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                        : Text(
+                          _faceRegistered
+                              ? 'Wajah sudah teregistrasi'
+                              : 'Face Recognition',
+                        ),
               ),
 
               const SizedBox(height: 8),
 
               // Register Client
               ElevatedButton(
-                onPressed: (!_faceRegistered || _loading) ? null : () async {
-                  if (!_formKey.currentState!.validate()||!_agreedEula) return;
-                  setState(()=>_loading=true);
-                  try {
-                    final cred = await FirebaseAuth.instance
-                      .createUserWithEmailAndPassword(email:_eC.text.trim(),password:_pC.text.trim());
-                    await FirebaseFirestore.instance.collection('users').doc(cred.user!.uid).set({
-                      'username':_uC.text.trim(),
-                      'email':_eC.text.trim(),
-                      'role':'client',
-                      'face_registered': true, // Status face recognition
-                      'createdAt':FieldValue.serverTimestamp(),
-                    });
-                    await _showSuccessAndGoLogin();
-                  } on FirebaseAuthException catch(e) {
-                    _showError(e.message??'Gagal registrasi');
-                  } finally {
-                    if(mounted) setState(()=>_loading=false);
-                  }
-                },
-                style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-                child: _loading?const CircularProgressIndicator():const Text('Register Client'),
+                onPressed:
+                    (!_faceRegistered || _loading)
+                        ? null
+                        : () async {
+                          if (!_formKey.currentState!.validate() ||
+                              !_agreedEula)
+                            return;
+                          setState(() => _loading = true);
+                          try {
+                            final cred = await FirebaseAuth.instance
+                                .createUserWithEmailAndPassword(
+                                  email: _eC.text.trim(),
+                                  password: _pC.text.trim(),
+                                );
+                            await FirebaseFirestore.instance
+                                .collection('users')
+                                .doc(cred.user!.uid)
+                                .set({
+                                  'username': _uC.text.trim(),
+                                  'email': _eC.text.trim(),
+                                  'role': 'client',
+                                  'face_registered':
+                                      true, // Status face recognition
+                                  'createdAt': FieldValue.serverTimestamp(),
+                                });
+                            await _showSuccessAndGoLogin();
+                          } on FirebaseAuthException catch (e) {
+                            _showError(e.message ?? 'Gagal registrasi');
+                          } finally {
+                            if (mounted) setState(() => _loading = false);
+                          }
+                        },
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
+                ),
+                child:
+                    _loading
+                        ? const CircularProgressIndicator()
+                        : const Text('Register Client'),
               ),
               const SizedBox(height: 8),
-              TextButton(onPressed: ()=>setState(()=>_mode=_SignUpMode.selection), child: const Text('Back')),
+              TextButton(
+                onPressed: () => setState(() => _mode = _SignUpMode.selection),
+                child: const Text('Back'),
+              ),
             ],
           ),
         ),
@@ -305,23 +402,46 @@ class _SignUpPageState extends State<SignUpPage> {
               color: Colors.black54,
               alignment: Alignment.center,
               child: SizedBox(
-                width: 300, height: 380,
+                width: 300,
+                height: 380,
                 child: Card(
                   margin: EdgeInsets.zero,
                   child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(
                       children: [
-                        const Text('PERJANJIAN PRIVASI DATA – BSD MEDIA',
-                          style: TextStyle(fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+                        const Text(
+                          'PERJANJIAN PRIVASI DATA – BSD MEDIA',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                          textAlign: TextAlign.center,
+                        ),
                         const SizedBox(height: 8),
-                        const Expanded(child: SingleChildScrollView(
-                          child: Text('… isi EULA singkat di sini …'),
-                        )),
+                        const Expanded(
+                          child: SingleChildScrollView(
+                            child: Text(
+                              '''Dengan menyetujui, Anda memahami dan menerima poin-poin berikut:
+
+1.  **Privasi Anda Terjamin:** Kami berkomitmen untuk melindungi privasi Anda. Data pribadi dan foto Anda tidak akan pernah dijual, disewakan, atau digunakan untuk tujuan periklanan oleh pihak manapun.
+
+2.  **Enkripsi Data Wajah:** Untuk melindungi foto Anda, kami menggunakan teknologi enkripsi canggih pada data biometrik wajah. Hanya Anda yang dapat mengakses foto pribadi Anda setelah verifikasi.
+
+3.  **Kontrol Penuh Atas Data:** Anda memiliki kontrol penuh atas data Anda. Anda dapat mencabut izin akses data dari pihak ketiga kapan saja melalui pengaturan akun Anda.
+
+4.  **Ketentuan & Sanksi Hukum:** Setiap penyalahgunaan platform atau pelanggaran terhadap kebijakan privasi ini akan dikenakan sanksi sesuai dengan hukum dan peraturan yang berlaku di Indonesia. Syarat dan ketentuan lebih lanjut dapat dibaca pada dokumen terpisah.''',
+                              textAlign:
+                                  TextAlign.justify, // Agar teks lebih rapi
+                            ),
+                          ),
+                        ),
                         CheckboxListTile(
-                          title: const Text('Saya setuju'),
+                          title: const Text(
+                            'Saya telah membaca dan menyetujui Perjanjian Privasi Data',
+                          ),
                           value: _agreedEula,
-                          onChanged: (v)=> setState(()=>_agreedEula=v!),
+                          onChanged: (v) => setState(() => _agreedEula = v!),
+                          controlAffinity:
+                              ListTileControlAffinity
+                                  .leading, // Agar checkbox di kiri
                         ),
                       ],
                     ),
@@ -345,20 +465,20 @@ class _SignUpPageState extends State<SignUpPage> {
           TextFormField(
             controller: _uC,
             decoration: const InputDecoration(labelText: 'Username Fotografer'),
-            validator: (v)=>v==null||v.isEmpty?'Harus diisi':null,
+            validator: (v) => v == null || v.isEmpty ? 'Harus diisi' : null,
           ),
           const SizedBox(height: 12),
           // === Tambahkan Nama Fotografer ===
           TextFormField(
             controller: _namaC,
             decoration: const InputDecoration(labelText: 'Nama Fotografer'),
-            validator: (v)=>v==null||v.isEmpty?'Harus diisi':null,
+            validator: (v) => v == null || v.isEmpty ? 'Harus diisi' : null,
           ),
           const SizedBox(height: 12),
           TextFormField(
             controller: _eC,
             decoration: const InputDecoration(labelText: 'Email Fotografer'),
-            validator: (v)=>v==null||v.isEmpty?'Harus diisi':null,
+            validator: (v) => v == null || v.isEmpty ? 'Harus diisi' : null,
           ),
           const SizedBox(height: 12),
           TextFormField(
@@ -367,11 +487,12 @@ class _SignUpPageState extends State<SignUpPage> {
             decoration: InputDecoration(
               labelText: 'Password Fotografer',
               suffixIcon: IconButton(
-                icon: Icon(_pwVis?Icons.visibility_off:Icons.visibility),
-                onPressed: ()=>setState(()=>_pwVis=!_pwVis),
+                icon: Icon(_pwVis ? Icons.visibility_off : Icons.visibility),
+                onPressed: () => setState(() => _pwVis = !_pwVis),
               ),
             ),
-            validator: (v)=>v==null||v.length<6?'Min 6 karakter':null,
+            validator:
+                (v) => v == null || v.length < 6 ? 'Min 6 karakter' : null,
           ),
           const SizedBox(height: 12),
           TextFormField(
@@ -380,11 +501,11 @@ class _SignUpPageState extends State<SignUpPage> {
             decoration: InputDecoration(
               labelText: 'Konfirmasi Password Fotografer',
               suffixIcon: IconButton(
-                icon: Icon(_cpwVis?Icons.visibility_off:Icons.visibility),
-                onPressed: ()=>setState(()=>_cpwVis=!_cpwVis),
+                icon: Icon(_cpwVis ? Icons.visibility_off : Icons.visibility),
+                onPressed: () => setState(() => _cpwVis = !_cpwVis),
               ),
             ),
-            validator: (v)=>v!=_pC.text?'Tidak cocok':null,
+            validator: (v) => v != _pC.text ? 'Tidak cocok' : null,
           ),
 
           const SizedBox(height: 24),
@@ -392,78 +513,94 @@ class _SignUpPageState extends State<SignUpPage> {
           // == NEW: Upload QRIS Button ==
           ElevatedButton.icon(
             icon: const Icon(Icons.upload_file),
-            label: Text(_qrisUrl == null ? 'Upload QRIS kamu' : 'QRIS ter-upload'),
+            label: Text(
+              _qrisUrl == null ? 'Upload QRIS kamu' : 'QRIS ter-upload',
+            ),
             style: ElevatedButton.styleFrom(
               minimumSize: const Size.fromHeight(48),
             ),
-            onPressed: _loading ? null : () async {
-              // pilih file
-              final result = await FilePicker.platform.pickFiles(withData: kIsWeb);
-              if (result == null) return; // batal
-              setState(() => _loading = true);
-              try {
-                final f = result.files.first;
-                final ref = FirebaseStorage.instance
-                    .ref('qris/${FirebaseAuth.instance.currentUser?.uid ?? 'temp'}/${f.name}');
-                if (kIsWeb) {
-                  await ref.putData(f.bytes!);
-                } else {
-                  await ref.putFile(File(f.path!));
-                }
-                _qrisUrl = await ref.getDownloadURL();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('QRIS berhasil di-upload!')),
-                );
-              } catch (e) {
-                _showError('Upload QRIS gagal: $e');
-              } finally {
-                setState(() => _loading = false);
-              }
-            },
+            onPressed:
+                _loading
+                    ? null
+                    : () async {
+                      // pilih file
+                      final result = await FilePicker.platform.pickFiles(
+                        withData: kIsWeb,
+                      );
+                      if (result == null) return; // batal
+                      setState(() => _loading = true);
+                      try {
+                        final f = result.files.first;
+                        final ref = FirebaseStorage.instance.ref(
+                          'qris/${FirebaseAuth.instance.currentUser?.uid ?? 'temp'}/${f.name}',
+                        );
+                        if (kIsWeb) {
+                          await ref.putData(f.bytes!);
+                        } else {
+                          await ref.putFile(File(f.path!));
+                        }
+                        _qrisUrl = await ref.getDownloadURL();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('QRIS berhasil di-upload!'),
+                          ),
+                        );
+                      } catch (e) {
+                        _showError('Upload QRIS gagal: $e');
+                      } finally {
+                        setState(() => _loading = false);
+                      }
+                    },
           ),
 
           const SizedBox(height: 16),
 
           // Daftar Fotografer (only enabled if QRIS sudah di-upload)
           ElevatedButton(
-            onPressed: (_loading || _qrisUrl == null) ? null : () async {
-              if (!_formKey.currentState!.validate()) return;
-              setState(()=>_loading=true);
-              try {
-                // 1) Auth
-                final cred = await FirebaseAuth.instance
-                  .createUserWithEmailAndPassword(
-                    email: _eC.text.trim(),
-                    password: _pC.text.trim(),
-                  );
-                // 2) Simpan di Firestore
-                final photographer = Photographer(
-                  id: cred.user!.uid,
-                  username: _uC.text.trim(),
-                  nama: _namaC.text.trim(),
-                  email: _eC.text.trim(),
-                  qrisUrl: _qrisUrl!,
-                );
-                await FirebaseFirestore.instance
-                  .collection('users')
-                  .doc(cred.user!.uid)
-                  .set(photographer.toMap());
-                await _showSuccessAndGoLogin();
-              } on FirebaseAuthException catch (e) {
-                _showError(e.message ?? 'Gagal registrasi');
-              } finally {
-                setState(()=>_loading=false);
-              }
-            },
-            style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-            child: _loading
-                ? const CircularProgressIndicator()
-                : const Text('Daftar Fotografer'),
+            onPressed:
+                (_loading || _qrisUrl == null)
+                    ? null
+                    : () async {
+                      if (!_formKey.currentState!.validate()) return;
+                      setState(() => _loading = true);
+                      try {
+                        // 1) Auth
+                        final cred = await FirebaseAuth.instance
+                            .createUserWithEmailAndPassword(
+                              email: _eC.text.trim(),
+                              password: _pC.text.trim(),
+                            );
+                        // 2) Simpan di Firestore
+                        final photographer = Photographer(
+                          id: cred.user!.uid,
+                          username: _uC.text.trim(),
+                          nama: _namaC.text.trim(),
+                          email: _eC.text.trim(),
+                          qrisUrl: _qrisUrl!,
+                        );
+                        await FirebaseFirestore.instance
+                            .collection('users')
+                            .doc(cred.user!.uid)
+                            .set(photographer.toMap());
+                        await _showSuccessAndGoLogin();
+                      } on FirebaseAuthException catch (e) {
+                        _showError(e.message ?? 'Gagal registrasi');
+                      } finally {
+                        setState(() => _loading = false);
+                      }
+                    },
+            style: ElevatedButton.styleFrom(
+              minimumSize: const Size.fromHeight(48),
+            ),
+            child:
+                _loading
+                    ? const CircularProgressIndicator()
+                    : const Text('Daftar Fotografer'),
           ),
 
           const SizedBox(height: 8),
           TextButton(
-            onPressed: ()=>setState(()=>_mode=_SignUpMode.selection),
+            onPressed: () => setState(() => _mode = _SignUpMode.selection),
             child: const Text('Back'),
           ),
         ],
@@ -475,9 +612,14 @@ class _SignUpPageState extends State<SignUpPage> {
   Widget build(BuildContext context) {
     Widget body;
     switch (_mode) {
-      case _SignUpMode.client:      body = _clientForm(); break;
-      case _SignUpMode.photographer: body = _photogForm(); break;
-      default:                       body = _buildModeSelection();
+      case _SignUpMode.client:
+        body = _clientForm();
+        break;
+      case _SignUpMode.photographer:
+        body = _photogForm();
+        break;
+      default:
+        body = _buildModeSelection();
     }
 
     return Scaffold(
@@ -485,7 +627,10 @@ class _SignUpPageState extends State<SignUpPage> {
       body: Center(
         child: Container(
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 32),
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+          ),
           child: body,
         ),
       ),

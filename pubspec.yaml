@@ -2,7 +2,7 @@ name: bsd_media
 description: "A new Flutter project."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
-publish_to: 'none' 
+publish_to: "none"
 
 version: 1.0.0+1
 
@@ -18,6 +18,9 @@ dependencies:
   cupertino_icons: ^1.0.8
   line_icons: ^2.0.3
   line_awesome_flutter: ^3.0.1
+
+  # proteksi screenshot
+  # flutter_windowmanager: ^0.2.0
 
   # intl url_launch
   intl: ^0.18.0
@@ -59,7 +62,6 @@ dependencies:
   firebase_storage: ^12.4.7
 
   firebase_storage_web: ^3.10.14
-
 
 dev_dependencies:
   flutter_test:
