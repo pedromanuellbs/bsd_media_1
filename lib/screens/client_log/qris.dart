@@ -2,10 +2,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:firebase_storage/firebase_storage.dart';
+// 1️⃣ Storage tidak lagi dipakai, jadi import-nya bisa dihapus.
+// import 'package:firebase_storage/firebase_storage.dart';
 
-// --- TAMBAHAN: Import halaman saved.dart ---
-import '../home/saved.dart';
+import '../home/saved.dart'; // --- TAMBAHAN: halaman Saved
 
 class QrisPage extends StatefulWidget {
   final String photographerId;
@@ -32,32 +32,31 @@ class _QrisPageState extends State<QrisPage> {
     _fetchQrisImageUrl();
   }
 
+  /// 2️⃣ Mendapatkan URL QRIS langsung dari dokumen `users/{photographerId}`
   Future<void> _fetchQrisImageUrl() async {
     try {
-      final listResult =
-          await FirebaseStorage.instance
-              .ref('qris/${widget.photographerId}')
-              .listAll();
+      final userSnap =
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(widget.photographerId)
+              .get();
 
-      if (listResult.items.isNotEmpty) {
-        final imageUrl = await listResult.items.first.getDownloadURL();
-        setState(() {
-          _qrisImageUrl = imageUrl;
-        });
+      if (userSnap.exists) {
+        // Pastikan key persis sama seperti di Firestore
+        final url = userSnap.data()?['qrisUrl'] as String?;
+        if (url != null && url.isNotEmpty) {
+          setState(() => _qrisImageUrl = url);
+        }
       }
     } catch (e) {
-      print('Gagal mengambil data QRIS dari Storage: $e');
+      debugPrint('Gagal mengambil data QRIS: $e');
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      setState(() => _isLoading = false);
     }
   }
 
   Future<void> _savePhotoAfterPayment() async {
-    setState(() {
-      _isSaving = true;
-    });
+    setState(() => _isSaving = true);
 
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
@@ -89,26 +88,22 @@ class _QrisPageState extends State<QrisPage> {
         ),
       );
 
-      // --- PERUBAHAN: Navigasi ke halaman Saved ---
-      // 1. Kembali ke halaman paling awal (root/home)
+      // Navigasi ke halaman Saved
       Navigator.of(context).popUntil((route) => route.isFirst);
-      // 2. Dorong halaman Saved ke atas tumpukan navigasi
       Navigator.of(
         context,
-      ).push(MaterialPageRoute(builder: (context) => const SavedPage()));
+      ).push(MaterialPageRoute(builder: (_) => const SavedPage()));
     } catch (e) {
-      print('Gagal menyimpan foto: $e');
+      debugPrint('Gagal menyimpan foto: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Terjadi kesalahan saat menyimpan foto.')),
       );
-    } finally {
-      // Tidak perlu setState di sini karena kita sudah pindah halaman
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    const String totalPembayaran = 'Rp 16.000';
+    const totalPembayaran = 'Rp 16.000';
 
     return Scaffold(
       appBar: AppBar(title: const Text('Pembayaran QRIS')),
@@ -136,11 +131,11 @@ class _QrisPageState extends State<QrisPage> {
               child:
                   _isLoading
                       ? const Center(child: CircularProgressIndicator())
-                      : (_qrisImageUrl != null && _qrisImageUrl!.isNotEmpty)
+                      : (_qrisImageUrl?.isNotEmpty ?? false)
                       ? Image.network(
                         _qrisImageUrl!,
                         errorBuilder:
-                            (context, error, stackTrace) => const Center(
+                            (_, __, ___) => const Center(
                               child: Text(
                                 'Gagal memuat gambar QRIS.',
                                 style: TextStyle(color: Colors.red),

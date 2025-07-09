@@ -10,10 +10,8 @@ import './payment.dart';
 class MatchPicsPage extends StatefulWidget {
   final List<Map<String, dynamic>> matchedPhotos;
 
-  const MatchPicsPage({
-    Key? key,
-    required this.matchedPhotos,
-  }) : super(key: key);
+  const MatchPicsPage({Key? key, required this.matchedPhotos})
+    : super(key: key);
 
   @override
   _MatchPicsPageState createState() => _MatchPicsPageState();
@@ -39,10 +37,11 @@ class _MatchPicsPageState extends State<MatchPicsPage> {
       return;
     }
     try {
-      final sessionDoc = await FirebaseFirestore.instance
-          .collection('photo_sessions')
-          .doc(sessionId)
-          .get();
+      final sessionDoc =
+          await FirebaseFirestore.instance
+              .collection('photo_sessions')
+              .doc(sessionId)
+              .get();
 
       if (sessionDoc.exists) {
         final details = sessionDoc.data()!;
@@ -50,12 +49,13 @@ class _MatchPicsPageState extends State<MatchPicsPage> {
         String photographerName = 'Fotografer tidak diketahui';
 
         if (photographerId != null) {
-          final userDoc = await FirebaseFirestore.instance
-              .collection('users')
-              .doc(photographerId)
-              .get();
+          final userDoc =
+              await FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(photographerId)
+                  .get();
           if (userDoc.exists) {
-            photographerName = userDoc.data()?['name'] ?? photographerName;
+            photographerName = userDoc.data()?['nama'] ?? photographerName;
           }
         }
         details['photographerName'] = photographerName;
@@ -92,55 +92,54 @@ class _MatchPicsPageState extends State<MatchPicsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Hasil Pencocokan'),
-      ),
+      appBar: AppBar(title: const Text('Hasil Pencocokan')),
       body: Stack(
         children: [
           widget.matchedPhotos.isEmpty
               ? const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(16.0),
-                    child: Text(
-                      'Tidak ada foto yang cocok ditemukan untuk wajah Anda.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 18),
-                    ),
+                child: Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: Text(
+                    'Tidak ada foto yang cocok ditemukan untuk wajah Anda.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 18),
                   ),
-                )
+                ),
+              )
               : GridView.builder(
-                  padding: const EdgeInsets.all(8.0),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    crossAxisSpacing: 8.0,
-                    mainAxisSpacing: 8.0,
-                  ),
-                  itemCount: widget.matchedPhotos.length,
-                  itemBuilder: (context, index) {
-                    final photo = widget.matchedPhotos[index];
-                    final thumbUrl =
-                        photo['webContentLink'] ?? photo['thumbnailLink'] ?? '';
-                    return GestureDetector(
-                      onTap: () {
-                        _showPhoto(photo);
-                      },
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(8.0),
-                        child: GridTile(
-                          child: CachedNetworkImage(
-                            imageUrl: thumbUrl,
-                            fit: BoxFit.cover,
-                            placeholder: (context, url) => const Center(
-                              child: CircularProgressIndicator(),
-                            ),
-                            errorWidget: (context, url, error) =>
-                                const Icon(Icons.error),
-                          ),
+                padding: const EdgeInsets.all(8.0),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 8.0,
+                  mainAxisSpacing: 8.0,
+                ),
+                itemCount: widget.matchedPhotos.length,
+                itemBuilder: (context, index) {
+                  final photo = widget.matchedPhotos[index];
+                  final thumbUrl =
+                      photo['webContentLink'] ?? photo['thumbnailLink'] ?? '';
+                  return GestureDetector(
+                    onTap: () {
+                      _showPhoto(photo);
+                    },
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8.0),
+                      child: GridTile(
+                        child: CachedNetworkImage(
+                          imageUrl: thumbUrl,
+                          fit: BoxFit.cover,
+                          placeholder:
+                              (context, url) => const Center(
+                                child: CircularProgressIndicator(),
+                              ),
+                          errorWidget:
+                              (context, url, error) => const Icon(Icons.error),
                         ),
                       ),
-                    );
-                  },
-                ),
+                    ),
+                  );
+                },
+              ),
           if (_selectedPhoto != null)
             Container(
               color: Colors.black.withOpacity(0.8),
@@ -158,53 +157,63 @@ class _MatchPicsPageState extends State<MatchPicsPage> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             CachedNetworkImage(
-                              imageUrl: _selectedPhoto!['webContentLink'] ??
+                              imageUrl:
+                                  _selectedPhoto!['webContentLink'] ??
                                   _selectedPhoto!['thumbnailLink'] ??
                                   '',
                               fit: BoxFit.fitWidth,
-                              placeholder: (context, url) =>
-                                  const Center(child: CircularProgressIndicator()),
-                              errorWidget: (context, url, error) => Container(
-                                color: Colors.grey[200],
-                                padding: const EdgeInsets.all(20),
-                                child: const Center(
-                                  child: Text(
-                                    'Gagal memuat gambar',
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(color: Colors.red),
+                              placeholder:
+                                  (context, url) => const Center(
+                                    child: CircularProgressIndicator(),
                                   ),
-                                ),
-                              ),
+                              errorWidget:
+                                  (context, url, error) => Container(
+                                    color: Colors.grey[200],
+                                    padding: const EdgeInsets.all(20),
+                                    child: const Center(
+                                      child: Text(
+                                        'Gagal memuat gambar',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(color: Colors.red),
+                                      ),
+                                    ),
+                                  ),
                             ),
                             _buildSessionDetails(),
                             Padding(
-                              padding:
-                                  const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                               child: Column(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.stretch,
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
                                   // --- PERUBAHAN: Aksi tombol "Tebus Foto ini" ---
                                   ElevatedButton(
-                                    onPressed: (_sessionDetails != null) ? () {
-                                      Navigator.of(context).push(
-                                        MaterialPageRoute(
-                                          builder: (context) => PaymentPage(
-                                            photoDetails: _selectedPhoto!,
-                                            sessionDetails: _sessionDetails!,
-                                          ),
-                                        ),
-                                      );
-                                    } : null, // Disable tombol jika detail belum dimuat
+                                    onPressed:
+                                        (_sessionDetails != null)
+                                            ? () {
+                                              Navigator.of(context).push(
+                                                MaterialPageRoute(
+                                                  builder:
+                                                      (context) => PaymentPage(
+                                                        photoDetails:
+                                                            _selectedPhoto!,
+                                                        sessionDetails:
+                                                            _sessionDetails!,
+                                                      ),
+                                                ),
+                                              );
+                                            }
+                                            : null, // Disable tombol jika detail belum dimuat
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor:
                                           Theme.of(context).primaryColor,
                                       foregroundColor: Colors.white,
                                       padding: const EdgeInsets.symmetric(
-                                          vertical: 12),
+                                        vertical: 12,
+                                      ),
                                       shape: RoundedRectangleBorder(
-                                        borderRadius:
-                                            BorderRadius.circular(8.0),
+                                        borderRadius: BorderRadius.circular(
+                                          8.0,
+                                        ),
                                       ),
                                     ),
                                     child: const Text('Tebus Foto ini'),
@@ -213,16 +222,19 @@ class _MatchPicsPageState extends State<MatchPicsPage> {
                                   OutlinedButton(
                                     onPressed: () {
                                       print(
-                                          'Laporkan foto: ${_selectedPhoto!['name']}');
+                                        'Laporkan foto: ${_selectedPhoto!['name']}',
+                                      );
                                     },
                                     style: OutlinedButton.styleFrom(
                                       foregroundColor: Colors.red,
                                       side: const BorderSide(color: Colors.red),
                                       padding: const EdgeInsets.symmetric(
-                                          vertical: 12),
+                                        vertical: 12,
+                                      ),
                                       shape: RoundedRectangleBorder(
-                                        borderRadius:
-                                            BorderRadius.circular(8.0),
+                                        borderRadius: BorderRadius.circular(
+                                          8.0,
+                                        ),
                                       ),
                                     ),
                                     child: const Text('Laporkan Foto ini'),
@@ -239,8 +251,11 @@ class _MatchPicsPageState extends State<MatchPicsPage> {
                     top: 16,
                     right: 16,
                     child: IconButton(
-                      icon: const Icon(Icons.close,
-                          color: Colors.white, size: 30),
+                      icon: const Icon(
+                        Icons.close,
+                        color: Colors.white,
+                        size: 30,
+                      ),
                       onPressed: _hidePhoto,
                       style: IconButton.styleFrom(
                         backgroundColor: Colors.black.withOpacity(0.5),
@@ -267,7 +282,10 @@ class _MatchPicsPageState extends State<MatchPicsPage> {
     if (_sessionDetails == null) {
       return const Padding(
         padding: EdgeInsets.all(16.0),
-        child: Text('Detail sesi tidak ditemukan.', textAlign: TextAlign.center),
+        child: Text(
+          'Detail sesi tidak ditemukan.',
+          textAlign: TextAlign.center,
+        ),
       );
     }
 
@@ -278,10 +296,7 @@ class _MatchPicsPageState extends State<MatchPicsPage> {
         children: [
           Text(
             _sessionDetails!['title'] ?? 'Tanpa Judul',
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
           Row(

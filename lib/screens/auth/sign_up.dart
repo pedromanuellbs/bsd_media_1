@@ -284,44 +284,60 @@ class _SignUpPageState extends State<SignUpPage> {
                           }
 
                           setState(() => _loading = true);
-                          final cams = await availableCameras();
-                          final File? foto = await Navigator.push<File?>(
-                            context,
-                            MaterialPageRoute(
-                              builder:
-                                  (_) => FaceCapturePage(
-                                    camera: cams.first,
-                                    isClient: false,
-                                  ),
-                            ), // <-- INI PERBAIKANNYA
-                          );
-                          if (foto != null &&
-                              await foto.exists() &&
-                              await foto.length() > 0) {
-                            final userId = _eC.text.trim();
-                            final bool success = await registerFaceLBPH(
-                              foto,
-                              userId,
-                            );
-                            setState(() {
-                              _loading = false;
-                              _faceRegistered = success;
-                              _faceFile = success ? foto : null;
-                            });
-                            // SARAN: Tampilkan hasil log ke user jika gagal
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  success
-                                      ? 'Registrasi wajah berhasil!'
-                                      : 'Registrasi wajah gagal! (lihat log untuk detail)',
-                                ),
+                          try {
+                            final cams = await availableCameras();
+                            final File? foto = await Navigator.push<File?>(
+                              context,
+                              MaterialPageRoute(
+                                builder:
+                                    (_) => FaceCapturePage(
+                                      camera: cams.first,
+                                      isClient: false,
+                                    ),
                               ),
                             );
-                          } else {
+
+                            if (foto != null && await foto.exists()) {
+                              final fileLength = await foto.length();
+                              if (fileLength == 0) {
+                                setState(() => _loading = false);
+                                _showError(
+                                  "File foto hasil capture kosong. Silakan ulangi pengambilan foto.",
+                                );
+                                return;
+                              }
+                              print(
+                                'DEBUG: Siap upload file dengan size: $fileLength bytes',
+                              );
+                              final userId = _eC.text.trim();
+                              final bool success = await registerFaceLBPH(
+                                foto,
+                                userId,
+                              );
+                              setState(() {
+                                _loading = false;
+                                _faceRegistered = success;
+                                _faceFile = success ? foto : null;
+                              });
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    success
+                                        ? 'Registrasi wajah berhasil!'
+                                        : 'Registrasi wajah gagal! (lihat log untuk detail)',
+                                  ),
+                                ),
+                              );
+                            } else {
+                              setState(() => _loading = false);
+                              _showError(
+                                "Gagal mengambil foto wajah, coba lagi.",
+                              );
+                            }
+                          } catch (e) {
                             setState(() => _loading = false);
                             _showError(
-                              "Gagal mengambil foto wajah, coba lagi.",
+                              "Terjadi error saat proses registrasi wajah: $e",
                             );
                           }
                         },
