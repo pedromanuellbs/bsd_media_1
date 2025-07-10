@@ -32,10 +32,6 @@ dependencies:
   # Media
   video_player: ^2.5.0
 
-  dio: ^5.1.2
-  permission_handler: ^10.4.0
-  gallery_saver: ^2.3.2
-
   # Camera & file IO
   camera: ^0.11.1
   path_provider: ^2.0.14
