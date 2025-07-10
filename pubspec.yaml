@@ -1,7 +1,5 @@
 name: bsd_media
 description: "A new Flutter project."
-# The following line prevents the package from being accidentally published to
-# pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: "none"
 
 version: 1.0.0+1
@@ -19,70 +17,43 @@ dependencies:
   line_icons: ^2.0.3
   line_awesome_flutter: ^3.0.1
 
-  # intl url_launch
   intl: ^0.20.2
   url_launcher: ^6.1.7
-
-  #cache img network
   cached_network_image: ^3.3.1
-
-  #img picker
   image_picker: ^1.1.0
-
-  # Media
   video_player: ^2.5.0
-
   dio: ^5.1.2
   permission_handler: ^12.0.1
-  # gallery_saver: ^2.3.2
-
-  # Camera & file IO
   camera: ^0.11.1
   path_provider: ^2.0.14
   path: ^1.8.3
-
   googleapis: ^13.1.0
   google_sign_in: ^7.1.0
-
-  # HTTP & JSON
   http: ^0.13.6
-
-  # Firebase core
   firebase_core: ^3.14.0
-
-  # Firebase Authentication
   firebase_auth: ^5.6.0
-
-  # Cloud Firestore
   cloud_firestore: ^5.6.9
-
-  #select file
   file_picker: ^10.2.0
-
-  # Firebase Storage (for photos, QRIS, etc.)
   firebase_storage: ^12.4.7
-
   firebase_storage_web: ^3.10.14
-
   cloud_functions: ^5.5.2
-
-  # screenshot_callback: ^3.0.1
-
-  # secure_application: ^4.0.1
-
   flutter_prevent_screenshot: ^0.0.1+12
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
-  # flutter_launcher_icons: "^0.13.1" # Tambahkan baris ini
 
 flutter:
   uses-material-design: true
 
   assets:
     - assets/logo-bsd-media.png
-    # - assets/bsd_media_icon.png
     - assets/vids/
     - assets/img/
+
+  # Uncomment jika perlu menambah font LineAwesome manual
+  # fonts:
+  #   - family: LineAwesome
+  #     fonts:
+  #       - asset: assets/fonts/LineAwesome.ttf

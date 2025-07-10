@@ -28,7 +28,7 @@ class _SavedPageState extends State<SavedPage> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Saved')),
+      // appBar: AppBar(title: const Text('Saved')),
       body: StreamBuilder<QuerySnapshot>(
         // Koleksi foto yang dibeli user
         stream:

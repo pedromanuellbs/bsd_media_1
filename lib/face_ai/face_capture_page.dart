@@ -1,5 +1,4 @@
 // face_ai/face_capture_page.dart
-
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -10,8 +9,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import '../screens/client_log/match_pics.dart';
 
-// ===== FUNGSI BARU (BAGIAN 1): MEMULAI PENCARIAN =====
-// Fungsi ini hanya mengirim gambar dan mendapatkan job_id
+// ===== FUNGSI: MEMULAI PENCARIAN =====
 Future<String?> startPhotoSearch(File faceFile) async {
   final url = Uri.parse(
     'https://backendlbphbsdmedia-production.up.railway.app/start_photo_search',
@@ -26,17 +24,16 @@ Future<String?> startPhotoSearch(File faceFile) async {
       final responseBody = await response.stream.bytesToString();
       final decodedBody = jsonDecode(responseBody);
       if (decodedBody['success'] == true) {
-        return decodedBody['job_id']; // Mengembalikan job_id
+        return decodedBody['job_id'];
       }
     }
   } catch (e) {
     print("Error saat memulai pencarian: $e");
   }
-  return null; // Kembalikan null jika gagal
+  return null;
 }
 
-// ===== FUNGSI BARU (BAGIAN 2): MENGECEK HASIL =====
-// Fungsi ini digunakan untuk mengecek status pekerjaan secara berkala
+// ===== FUNGSI: MENGECEK HASIL (dengan progress) =====
 Future<Map<String, dynamic>?> getSearchResult(String jobId) async {
   final url = Uri.parse(
     'https://backendlbphbsdmedia-production.up.railway.app/get_search_status?job_id=$jobId',
@@ -47,13 +44,13 @@ Future<Map<String, dynamic>?> getSearchResult(String jobId) async {
     if (response.statusCode == 200) {
       final decodedBody = jsonDecode(response.body);
       if (decodedBody['success'] == true) {
-        return decodedBody['job_data']; // Mengembalikan seluruh data job
+        return decodedBody['job_data'];
       }
     }
   } catch (e) {
     print("Error saat mengecek hasil: $e");
   }
-  return null; // Kembalikan null jika gagal
+  return null;
 }
 
 class FaceCapturePage extends StatefulWidget {
@@ -73,7 +70,12 @@ class FaceCapturePage extends StatefulWidget {
 class _FaceCapturePageState extends State<FaceCapturePage> {
   late CameraController _controller;
   Future<void>? _initFuture;
-  Timer? _pollingTimer; // Tambahkan variabel untuk timer
+  Timer? _pollingTimer;
+
+  // Tambahan state untuk progress bar
+  int? _progress;
+  int? _total;
+  String? _status;
 
   @override
   void initState() {
@@ -93,19 +95,22 @@ class _FaceCapturePageState extends State<FaceCapturePage> {
     if (mounted) setState(() {});
   }
 
-  // ===== UBAHAN UTAMA DI FUNGSI INI =====
   Future<void> _takePicture() async {
     if (!mounted || !_controller.value.isInitialized) return;
 
-    // Tampilkan loading indicator
+    // Tampilkan dialog progress
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator()),
+      builder:
+          (_) => ProgressDialog(
+            progress: _progress,
+            total: _total,
+            status: _status,
+          ),
     );
 
     try {
-      // 1. Ambil foto
       final XFile raw = await _controller.takePicture();
       final tmpDir = await getTemporaryDirectory();
       final savePath = p.join(
@@ -115,17 +120,21 @@ class _FaceCapturePageState extends State<FaceCapturePage> {
       await raw.saveTo(savePath);
       final faceFile = File(savePath);
 
-      // 2. Jika role adalah client, jalankan alur asinkron
       if (widget.isClient) {
-        // Mulai pencarian dan dapatkan job ID
         final jobId = await startPhotoSearch(faceFile);
 
         if (jobId == null) {
           throw Exception('Gagal memulai tugas pencarian di server.');
         }
 
-        // Mulai polling setiap 5 detik
-        _pollingTimer = Timer.periodic(const Duration(seconds: 5), (
+        // Reset progress state
+        setState(() {
+          _progress = null;
+          _total = null;
+          _status = 'pending';
+        });
+
+        _pollingTimer = Timer.periodic(const Duration(seconds: 3), (
           timer,
         ) async {
           if (!mounted) {
@@ -133,49 +142,53 @@ class _FaceCapturePageState extends State<FaceCapturePage> {
             return;
           }
 
-          print("Polling untuk job_id: $jobId");
           final jobData = await getSearchResult(jobId);
+          if (jobData != null) {
+            setState(() {
+              _status = jobData['status'];
+              _progress = jobData['progress'];
+              _total = jobData['total'];
+            });
 
-          if (jobData != null && jobData['status'] == 'completed') {
-            timer.cancel(); // Hentikan polling
-            final List matchedPhotos = jobData['results'] ?? [];
-
-            if (mounted) {
-              Navigator.pop(context); // Tutup loading dialog
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder:
-                      (_) => MatchPicsPage(
-                        matchedPhotos:
-                            matchedPhotos.cast<Map<String, dynamic>>(),
-                      ),
-                ),
-              );
-            }
-          } else if (jobData != null && jobData['status'] == 'failed') {
-            timer.cancel(); // Hentikan polling
-            if (mounted) {
-              Navigator.pop(context); // Tutup loading dialog
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Pencarian gagal: ${jobData['error']}')),
-              );
+            if (jobData['status'] == 'completed') {
+              timer.cancel();
+              final List matchedPhotos = jobData['results'] ?? [];
+              if (mounted) {
+                Navigator.pop(context); // Tutup dialog
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder:
+                        (_) => MatchPicsPage(
+                          matchedPhotos:
+                              matchedPhotos.cast<Map<String, dynamic>>(),
+                        ),
+                  ),
+                );
+              }
+            } else if (jobData['status'] == 'failed') {
+              timer.cancel();
+              if (mounted) {
+                Navigator.pop(context); // Tutup dialog
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Pencarian gagal: ${jobData['error']}'),
+                  ),
+                );
+              }
             }
           }
-          // Jika status masih 'pending' atau 'processing', biarkan timer berjalan
         });
-      }
-      // 3. Jika bukan client (logika registrasi lama)
-      else {
+      } else {
         if (mounted) {
-          Navigator.pop(context); // Tutup loading dialog
-          Navigator.pop(context, faceFile); // Kembalikan file
+          Navigator.pop(context); // Tutup dialog
+          Navigator.pop(context, faceFile);
         }
       }
     } catch (e) {
       debugPrint('❌ Error proses foto: $e');
       if (mounted) {
-        Navigator.pop(context); // Tutup loading dialog
+        Navigator.pop(context); // Tutup dialog
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Terjadi error: ${e.toString()}')),
         );
@@ -186,7 +199,7 @@ class _FaceCapturePageState extends State<FaceCapturePage> {
   @override
   void dispose() {
     _controller.dispose();
-    _pollingTimer?.cancel(); // Pastikan timer dibatalkan saat page ditutup
+    _pollingTimer?.cancel();
     super.dispose();
   }
 
@@ -208,6 +221,55 @@ class _FaceCapturePageState extends State<FaceCapturePage> {
         onPressed: _takePicture,
         tooltip: 'Ambil Foto',
         child: const Icon(Icons.camera_alt),
+      ),
+    );
+  }
+}
+
+// Widget progress bar custom
+class ProgressDialog extends StatelessWidget {
+  final int? progress;
+  final int? total;
+  final String? status;
+
+  const ProgressDialog({Key? key, this.progress, this.total, this.status})
+    : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    bool showProgress =
+        status == 'processing' &&
+        progress != null &&
+        total != null &&
+        total! > 0;
+    return Dialog(
+      backgroundColor: Colors.white,
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            showProgress
+                ? Column(
+                  children: [
+                    LinearProgressIndicator(value: progress! / total!),
+                    const SizedBox(height: 16),
+                    Text('Memproses foto: $progress dari $total'),
+                  ],
+                )
+                : Column(
+                  children: [
+                    const CircularProgressIndicator(),
+                    const SizedBox(height: 16),
+                    Text(
+                      status == 'pending'
+                          ? 'Menunggu antrian...'
+                          : 'Memulai...',
+                    ),
+                  ],
+                ),
+          ],
+        ),
       ),
     );
   }
