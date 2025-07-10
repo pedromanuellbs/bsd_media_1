@@ -20,7 +20,7 @@ dependencies:
   line_awesome_flutter: ^3.0.1
 
   # intl url_launch
-  intl: ^0.18.0
+  intl: ^0.20.2
   url_launcher: ^6.1.7
 
   #cache img network
@@ -33,8 +33,8 @@ dependencies:
   video_player: ^2.5.0
 
   dio: ^5.1.2
-  permission_handler: ^10.4.0
-  gallery_saver: ^2.3.2
+  permission_handler: ^12.0.1
+  # gallery_saver: ^2.3.2
 
   # Camera & file IO
   camera: ^0.11.1
@@ -42,7 +42,7 @@ dependencies:
   path: ^1.8.3
 
   googleapis: ^13.1.0
-  google_sign_in: ^5.0.0
+  google_sign_in: ^7.1.0
 
   # HTTP & JSON
   http: ^0.13.6
@@ -64,10 +64,20 @@ dependencies:
 
   firebase_storage_web: ^3.10.14
 
+  cloud_functions: ^5.5.2
+
+  # screenshot_callback: ^3.0.1
+
+  # secure_application: ^4.0.1
+
+  flutter_prevent_screenshot: ^0.0.1+12
+
+  
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^5.0.0
+  flutter_lints: ^6.0.0
   # flutter_launcher_icons: "^0.13.1" # Tambahkan baris ini
 
 flutter:
