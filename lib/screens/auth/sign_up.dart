@@ -580,6 +580,18 @@ class _SignUpPageState extends State<SignUpPage> {
                       if (!_formKey.currentState!.validate()) return;
                       setState(() => _loading = true);
                       try {
+                        final username = _uC.text.trim();
+                        final q = await FirebaseFirestore.instance
+                            .collection('users')
+                            .where('username', isEqualTo: username)
+                            .limit(1)
+                            .get();
+
+                        if (q.docs.isNotEmpty) {
+                          _showError('Username sudah digunakan. Silakan pilih yang lain.');
+                          setState(() => _loading = false);
+                          return;
+                        }
                         // 1) Auth
                         final cred = await FirebaseAuth.instance
                             .createUserWithEmailAndPassword(
