@@ -297,6 +297,16 @@ class _SignUpPageState extends State<SignUpPage> {
                               ),
                             );
 
+                            if (foto != null) {
+                              print(
+                                'DEBUG_FLUTTER: File foto diterima dari FaceCapturePage. Path: ${foto.path}, exists: ${await foto.exists()}, length: ${await foto.length()}',
+                              );
+                            } else {
+                              print(
+                                'DEBUG_FLUTTER: FaceCapturePage mengembalikan null atau tidak ada foto.',
+                              );
+                            }
+
                             if (foto != null && await foto.exists()) {
                               final fileLength = await foto.length();
                               if (fileLength == 0) {
@@ -581,14 +591,17 @@ class _SignUpPageState extends State<SignUpPage> {
                       setState(() => _loading = true);
                       try {
                         final username = _uC.text.trim();
-                        final q = await FirebaseFirestore.instance
-                            .collection('users')
-                            .where('username', isEqualTo: username)
-                            .limit(1)
-                            .get();
+                        final q =
+                            await FirebaseFirestore.instance
+                                .collection('users')
+                                .where('username', isEqualTo: username)
+                                .limit(1)
+                                .get();
 
                         if (q.docs.isNotEmpty) {
-                          _showError('Username sudah digunakan. Silakan pilih yang lain.');
+                          _showError(
+                            'Username sudah digunakan. Silakan pilih yang lain.',
+                          );
                           setState(() => _loading = false);
                           return;
                         }

@@ -9,48 +9,67 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import '../screens/client_log/match_pics.dart';
 
-// ===== FUNGSI: MEMULAI PENCARIAN =====
-Future<String?> startPhotoSearch(File faceFile) async {
+// ===== FUNGSI: MELAKUKAN PENCARIAN FOTO SECARA LANGSUNG =====
+Future<Map<String, dynamic>?> findMyPhotos(File faceFile) async {
   final url = Uri.parse(
-    'https://backendlbphbsdmedia-production.up.railway.app/start_photo_search',
+    'https://backendlbphbsdmedia-production.up.railway.app/find_my_photos',
   );
 
   var request = http.MultipartRequest('POST', url);
   request.files.add(await http.MultipartFile.fromPath('image', faceFile.path));
 
   try {
-    final response = await request.send();
-    if (response.statusCode == 200) {
-      final responseBody = await response.stream.bytesToString();
-      final decodedBody = jsonDecode(responseBody);
-      if (decodedBody['success'] == true) {
-        return decodedBody['job_id'];
-      }
-    }
-  } catch (e) {
-    print("Error saat memulai pencarian: $e");
-  }
-  return null;
-}
+    final response = await request.send().timeout(
+      const Duration(
+        seconds: 300, // Pastikan timeout sudah diperpanjang
+      ),
+      onTimeout: () => throw TimeoutException('Request timeout'),
+    );
 
-// ===== FUNGSI: MENGECEK HASIL (dengan progress) =====
-Future<Map<String, dynamic>?> getSearchResult(String jobId) async {
-  final url = Uri.parse(
-    'https://backendlbphbsdmedia-production.up.railway.app/get_search_status?job_id=$jobId',
-  );
+    final responseBody = await response.stream.bytesToString();
+    debugPrint(
+      'DEBUG_FLUTTER: findMyPhotos - HTTP Status Code: ${response.statusCode}',
+    );
+    debugPrint(
+      'DEBUG_FLUTTER: findMyPhotos - Raw Response Body: $responseBody',
+    );
 
-  try {
-    final response = await http.get(url);
     if (response.statusCode == 200) {
-      final decodedBody = jsonDecode(response.body);
-      if (decodedBody['success'] == true) {
-        return decodedBody['job_data'];
+      try {
+        final decodedBody = jsonDecode(responseBody);
+        debugPrint('DEBUG_FLUTTER: findMyPhotos - Decoded Body: $decodedBody');
+
+        if (decodedBody['success'] == true) {
+          return decodedBody;
+        } else {
+          print("Server error: ${decodedBody['error']}");
+          return decodedBody;
+        }
+      } catch (e) {
+        debugPrint('ERROR_FLUTTER: findMyPhotos - Error decoding JSON: $e');
+        debugPrint(
+          'ERROR_FLUTTER: findMyPhotos - Raw body that caused error: $responseBody',
+        );
+        return {
+          'success': false,
+          'error': 'Gagal memproses respons dari server (JSON error)',
+        };
       }
+    } else {
+      print("HTTP error: ${response.statusCode}");
+      debugPrint("HTTP error body: $responseBody");
+      return {'success': false, 'error': 'HTTP Error ${response.statusCode}'};
     }
+  } on TimeoutException catch (e) {
+    print("Timeout error: $e");
+    return {'success': false, 'error': 'Request timeout'};
   } catch (e) {
-    print("Error saat mengecek hasil: $e");
+    print("General error: $e");
+    return {
+      'success': false,
+      'error': 'Terjadi kesalahan umum: ${e.toString()}',
+    };
   }
-  return null;
 }
 
 class FaceCapturePage extends StatefulWidget {
@@ -70,11 +89,6 @@ class FaceCapturePage extends StatefulWidget {
 class _FaceCapturePageState extends State<FaceCapturePage> {
   late CameraController _controller;
   Future<void>? _initFuture;
-  Timer? _pollingTimer;
-
-  // Tambahan state untuk progress bar
-  int? _progress;
-  int? _total;
   String? _status;
 
   @override
@@ -98,20 +112,18 @@ class _FaceCapturePageState extends State<FaceCapturePage> {
   Future<void> _takePicture() async {
     if (!mounted || !_controller.value.isInitialized) return;
 
-    // Tampilkan dialog progress
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder:
-          (_) => ProgressDialog(
-            progress: _progress,
-            total: _total,
-            status: _status,
-          ),
+      builder: (_) => ProgressDialog(status: _status),
     );
 
     try {
       final XFile raw = await _controller.takePicture();
+      debugPrint(
+        'DEBUG_FLUTTER: XFile dari kamera. Path: ${raw.path}, bytes: ${await raw.readAsBytes().then((b) => b.length)}',
+      );
+
       final tmpDir = await getTemporaryDirectory();
       final savePath = p.join(
         tmpDir.path,
@@ -119,66 +131,55 @@ class _FaceCapturePageState extends State<FaceCapturePage> {
       );
       await raw.saveTo(savePath);
       final faceFile = File(savePath);
+      debugPrint(
+        'DEBUG_FLUTTER: File foto disimpan. Path: $savePath, exists: ${await faceFile.exists()}, length: ${await faceFile.length()}',
+      );
 
       if (widget.isClient) {
-        final jobId = await startPhotoSearch(faceFile);
-
-        if (jobId == null) {
-          throw Exception('Gagal memulai tugas pencarian di server.');
-        }
-
-        // Reset progress state
         setState(() {
-          _progress = null;
-          _total = null;
-          _status = 'pending';
+          _status = 'Memproses...';
         });
 
-        _pollingTimer = Timer.periodic(const Duration(seconds: 3), (
-          timer,
-        ) async {
-          if (!mounted) {
-            timer.cancel();
-            return;
-          }
+        final searchResult = await findMyPhotos(faceFile);
 
-          final jobData = await getSearchResult(jobId);
-          if (jobData != null) {
-            setState(() {
-              _status = jobData['status'];
-              _progress = jobData['progress'];
-              _total = jobData['total'];
-            });
+        if (mounted) {
+          Navigator.pop(context); // Tutup dialog
 
-            if (jobData['status'] == 'completed') {
-              timer.cancel();
-              final List matchedPhotos = jobData['results'] ?? [];
-              if (mounted) {
-                Navigator.pop(context); // Tutup dialog
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder:
-                        (_) => MatchPicsPage(
-                          matchedPhotos:
-                              matchedPhotos.cast<Map<String, dynamic>>(),
-                        ),
-                  ),
-                );
-              }
-            } else if (jobData['status'] == 'failed') {
-              timer.cancel();
-              if (mounted) {
-                Navigator.pop(context); // Tutup dialog
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Pencarian gagal: ${jobData['error']}'),
-                  ),
-                );
-              }
-            }
+          if (searchResult != null && searchResult['success'] == true) {
+            final List matchedPhotos = searchResult['matched_photos'] ?? [];
+
+            debugPrint(
+              'DEBUG_FLUTTER: findMyPhotos returned success: ${searchResult['success']}',
+            );
+            debugPrint(
+              'DEBUG_FLUTTER: Matched photos count: ${matchedPhotos.length}',
+            );
+            debugPrint('DEBUG_FLUTTER: Matched photos content: $matchedPhotos');
+            debugPrint(
+              'DEBUG_FLUTTER: Full searchResult from backend: $searchResult',
+            );
+
+            // --- PERUBAHAN DI SINI: SELALU NAVIGASI JIKA PENCARIAN BERHASIL ---
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder:
+                    (_) => MatchPicsPage(
+                      matchedPhotos: matchedPhotos.cast<Map<String, dynamic>>(),
+                    ),
+              ),
+            );
+            // --- AKHIR PERUBAHAN ---
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Pencarian gagal: ${searchResult?['error'] ?? 'Terjadi kesalahan tidak dikenal'}',
+                ),
+              ),
+            );
           }
-        });
+        }
       } else {
         if (mounted) {
           Navigator.pop(context); // Tutup dialog
@@ -199,7 +200,6 @@ class _FaceCapturePageState extends State<FaceCapturePage> {
   @override
   void dispose() {
     _controller.dispose();
-    _pollingTimer?.cancel();
     super.dispose();
   }
 
@@ -226,7 +226,6 @@ class _FaceCapturePageState extends State<FaceCapturePage> {
   }
 }
 
-// Widget progress bar custom
 class ProgressDialog extends StatelessWidget {
   final int? progress;
   final int? total;
@@ -237,11 +236,6 @@ class ProgressDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    bool showProgress =
-        status == 'processing' &&
-        progress != null &&
-        total != null &&
-        total! > 0;
     return Dialog(
       backgroundColor: Colors.white,
       child: Padding(
@@ -249,25 +243,9 @@ class ProgressDialog extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            showProgress
-                ? Column(
-                  children: [
-                    LinearProgressIndicator(value: progress! / total!),
-                    const SizedBox(height: 16),
-                    Text('Memproses foto: $progress dari $total'),
-                  ],
-                )
-                : Column(
-                  children: [
-                    const CircularProgressIndicator(),
-                    const SizedBox(height: 16),
-                    Text(
-                      status == 'pending'
-                          ? 'Menunggu antrian...'
-                          : 'Memulai...',
-                    ),
-                  ],
-                ),
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            Text(status ?? 'Memulai...'),
           ],
         ),
       ),

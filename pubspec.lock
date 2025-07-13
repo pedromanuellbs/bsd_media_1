@@ -281,6 +281,30 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.9.3+4"
+  firebase_app_check:
+    dependency: "direct main"
+    description:
+      name: firebase_app_check
+      sha256: be2a494f6c82c2a344ef4aca8dea197df7cc90132ec7c6d37c7a562fe497fcda
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.3.2+9"
+  firebase_app_check_platform_interface:
+    dependency: transitive
+    description:
+      name: firebase_app_check_platform_interface
+      sha256: ab0ee47778d18ebfb95e7a6458469f915c5da55db593bc3aa58347903fa49969
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.1.1+9"
+  firebase_app_check_web:
+    dependency: transitive
+    description:
+      name: firebase_app_check_web
+      sha256: be17e04e53a4fea7ba10c27cd28d422fb919a4a5fafb101416730e37c68ba417
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.2.0+13"
   firebase_auth:
     dependency: "direct main"
     description:
@@ -390,14 +414,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.0.28"
-  flutter_prevent_screenshot:
-    dependency: "direct main"
-    description:
-      name: flutter_prevent_screenshot
-      sha256: "65cd2fd463d5d1b137bce82dc27732538bd9f0bfe56587f87c87d13e640d3d65"
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.0.1+16"
   flutter_test:
     dependency: "direct dev"
     description: flutter
@@ -640,6 +656,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.0.0"
+  nested:
+    dependency: transitive
+    description:
+      name: nested
+      sha256: "03bac4c528c64c95c722ec99280375a6f2fc708eec17c7b3f07253b626cd2a20"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.0"
   octo_image:
     dependency: transitive
     description:
@@ -768,6 +792,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.1.8"
+  provider:
+    dependency: "direct main"
+    description:
+      name: provider
+      sha256: "4abbd070a04e9ddc287673bf5a030c7ca8b685ff70218720abab8b092f53dd84"
+      url: "https://pub.dev"
+    source: hosted
+    version: "6.1.5"
   rxdart:
     dependency: transitive
     description:

@@ -38,7 +38,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
       return;
     }
     uid = user.uid;
-    final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+    final doc =
+        await FirebaseFirestore.instance.collection('users').doc(uid).get();
     setState(() {
       _nameCtrl.text = doc.data()?['username'] ?? user.displayName ?? '';
       _aboutCtrl.text = doc.data()?['about'] ?? '';
@@ -52,26 +53,49 @@ class _EditProfilePageState extends State<EditProfilePage> {
     if (!_formKey.currentState!.validate()) return;
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
+
     setState(() => isLoading = true);
 
-    String? uploadedUrl = photoUrl;
-    if (_newImageFile != null) {
-      final fileName = 'profile_${user.uid}_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      final ref = FirebaseStorage.instance.ref().child('profile_images').child(fileName);
-      await ref.putFile(_newImageFile!);
-      uploadedUrl = await ref.getDownloadURL();
-    }
+    try {
+      String? uploadedUrl = photoUrl;
+      // 1. Upload gambar baru jika ada
+      if (_newImageFile != null) {
+        final fileName =
+            'profile_${user.uid}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        final ref = FirebaseStorage.instance
+            .ref()
+            .child('profile_images')
+            .child(fileName);
+        await ref.putFile(_newImageFile!);
+        uploadedUrl = await ref.getDownloadURL();
+      }
 
-    await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
-      'username': _nameCtrl.text.trim(),
-      'about': _aboutCtrl.text.trim(),
-      'photoUrl': uploadedUrl,
-    });
+      // 2. Gunakan .set() dengan merge: true untuk membuat atau memperbarui dokumen
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+        'username': _nameCtrl.text.trim(),
+        'about': _aboutCtrl.text.trim(),
+        'photoUrl': uploadedUrl,
+      }, SetOptions(merge: true)); // <-- PERUBAHAN UTAMA DI SINI
 
-    setState(() => isLoading = false);
-
-    if (mounted) {
-      Navigator.of(context).pop(true);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Profil berhasil disimpan!')),
+        );
+        Navigator.of(context).pop(true);
+      }
+    } catch (e) {
+      // Tangani error jika terjadi
+      debugPrint('Error saving profile: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Gagal menyimpan profil: $e')));
+      }
+    } finally {
+      // Pastikan loading spinner selalu berhenti, baik berhasil maupun gagal
+      if (mounted) {
+        setState(() => isLoading = false);
+      }
     }
   }
 
@@ -89,9 +113,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
         });
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal membuka galeri: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Gagal membuka galeri: $e')));
     }
   }
 
@@ -148,62 +172,68 @@ class _EditProfilePageState extends State<EditProfilePage> {
         title: const Text('Edit Profile'),
         backgroundColor: Colors.deepPurple,
       ),
-      body: isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Form(
-                key: _formKey,
-                child: ListView(
-                  children: [
-                    const SizedBox(height: 20),
-                    Center(child: _buildProfileImage()),
-                    const SizedBox(height: 30),
-                    TextFormField(
-                      controller: _nameCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Full Name',
-                        prefixIcon: Icon(Icons.person),
-                        border: OutlineInputBorder(),
+      body:
+          isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Form(
+                  key: _formKey,
+                  child: ListView(
+                    children: [
+                      const SizedBox(height: 20),
+                      Center(child: _buildProfileImage()),
+                      const SizedBox(height: 30),
+                      TextFormField(
+                        controller: _nameCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Full Name',
+                          prefixIcon: Icon(Icons.person),
+                          border: OutlineInputBorder(),
+                        ),
+                        validator:
+                            (v) =>
+                                v == null || v.trim().isEmpty
+                                    ? 'Nama wajib diisi'
+                                    : null,
                       ),
-                      validator: (v) =>
-                          v == null || v.trim().isEmpty ? 'Nama wajib diisi' : null,
-                    ),
-                    const SizedBox(height: 20),
-                    TextFormField(
-                      enabled: false,
-                      initialValue: email ?? '',
-                      decoration: const InputDecoration(
-                        labelText: 'Email',
-                        prefixIcon: Icon(Icons.email),
-                        border: OutlineInputBorder(),
+                      const SizedBox(height: 20),
+                      TextFormField(
+                        enabled: false,
+                        initialValue: email ?? '',
+                        decoration: const InputDecoration(
+                          labelText: 'Email',
+                          prefixIcon: Icon(Icons.email),
+                          border: OutlineInputBorder(),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 20),
-                    TextFormField(
-                      controller: _aboutCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'About',
-                        prefixIcon: Icon(Icons.info_outline),
-                        border: OutlineInputBorder(),
+                      const SizedBox(height: 20),
+                      TextFormField(
+                        controller: _aboutCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'About',
+                          prefixIcon: Icon(Icons.info_outline),
+                          border: OutlineInputBorder(),
+                        ),
+                        maxLines: 4,
                       ),
-                      maxLines: 4,
-                    ),
-                    const SizedBox(height: 30),
-                    ElevatedButton.icon(
-                      icon: const Icon(Icons.save),
-                      label: const Text('Simpan'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.deepPurple,
-                        minimumSize: const Size.fromHeight(48),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      const SizedBox(height: 30),
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.save),
+                        label: const Text('Simpan'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.deepPurple,
+                          minimumSize: const Size.fromHeight(48),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        onPressed: isLoading ? null : _saveProfile,
                       ),
-                      onPressed: isLoading ? null : _saveProfile,
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
     );
   }
 }

@@ -22,14 +22,17 @@ class SettingsPage2 extends StatelessWidget {
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.only(
-            left: leftPadding, right: 16, top: 16, bottom: 16,
+            left: leftPadding,
+            right: 16,
+            top: 16,
+            bottom: 16,
           ),
           children: [
             const Padding(
               padding: EdgeInsets.only(bottom: 8),
               child: Text(
                 'General',
-                style: TextStyle(fontSize:16, fontWeight: FontWeight.bold),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
             ),
             _CustomListTile(
@@ -54,12 +57,8 @@ class SettingsPage2 extends StatelessWidget {
               padding: EdgeInsets.only(bottom: 8),
               child: Text(
                 'Organization',
-                style: TextStyle(fontSize:16, fontWeight: FontWeight.bold),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
-            ),
-            const _CustomListTile(
-              title: 'Profil',
-              icon: Icons.person_outline_rounded,
             ),
             const _CustomListTile(
               title: 'People',
@@ -70,23 +69,62 @@ class SettingsPage2 extends StatelessWidget {
             _CustomListTile(
               title: 'Cara Kerja',
               icon: LineAwesomeIcons.user_cog_solid,
-              onTap: () {
-                // aksi jika perlu
-              },
+              onTap: () {},
             ),
 
             const Divider(height: 32),
-            const _CustomListTile(
+            _CustomListTile(
               title: 'Bahasa',
               icon: LineAwesomeIcons.language_solid,
+              onTap: () {
+                showDialog(
+                  context: context,
+                  builder: (BuildContext context) {
+                    return AlertDialog(
+                      title: const Text('Pilih Bahasa'),
+                      content: const Text('Fitur ini belum tersedia.'),
+                      actions: <Widget>[
+                        TextButton(
+                          child: const Text('OK'),
+                          onPressed: () {
+                            Navigator.of(context).pop();
+                          },
+                        ),
+                      ],
+                    );
+                  },
+                );
+              },
             ),
             const _CustomListTile(
               title: 'Bantuan',
               icon: Icons.help_outline_rounded,
             ),
-            const _CustomListTile(
+            _CustomListTile(
               title: 'Tentang Aplikasi Ini',
               icon: Icons.info_outline_rounded,
+              onTap: () {
+                showDialog(
+                  context: context,
+                  builder: (BuildContext context) {
+                    return AlertDialog(
+                      title: const Text('Tentang Aplikasi Ini'),
+                      content: const Text(
+                        'Aplikasi ini dibuat untuk memenuhi Tugas Akhir tentang Penerapan Face Recognition untuk memenuhi Data Privacy Fotografer. Aplikasi ini masih dalam tahap pengembangan, diharapkan kedepannya bisa berkembang dengan sempurna.',
+                      ),
+                      actions: <Widget>[
+                        TextButton(
+                          child: const Text('OK'),
+                          onPressed: () {
+                            // This closes the dialog
+                            Navigator.of(context).pop();
+                          },
+                        ),
+                      ],
+                    );
+                  },
+                );
+              },
             ),
             _CustomListTile(
               title: 'Sign out',

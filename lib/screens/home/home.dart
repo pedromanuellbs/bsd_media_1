@@ -48,6 +48,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   late final PageController _pageController;
   bool _isLoading = true;
   List<_PhotoSessionFeedData> _feeds = [];
+  String? photoUrl;
+  // bool _isPhotographer = false;
 
   // API Key Google Drive (samakan dengan collage_page.dart)
   static const _apiKey = 'AIzaSyC_vPd6yPwYQ60Pn-tuR3Nly_7mgXZcxGk';
@@ -344,7 +346,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       case 2:
         return _isPhotographer ? 'Buat Sesi Foto' : 'Search';
       case 3:
-        return 'Profile';
+        return _isPhotographer ? 'Profile' : 'Profile';
       case 4:
         return 'Settings';
       default:
@@ -352,40 +354,61 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     }
   }
 
-  List<SalomonBottomBarItem> _navItems() => [
-    SalomonBottomBarItem(
-      icon: const Icon(Icons.home),
-      title: const Text("Home"),
-      selectedColor: Colors.purple,
-    ),
-    if (_isPhotographer)
+  List<SalomonBottomBarItem> _navItems() {
+    // 1. Create a local variable to help Dart's null safety analysis
+    final localPhotoUrl = photoUrl;
+
+    return [
       SalomonBottomBarItem(
-        icon: const Icon(Icons.history),
-        title: const Text('History'),
-        selectedColor: Colors.teal,
-      )
-    else if (_isClient)
+        icon: const Icon(Icons.home),
+        title: const Text("Home"),
+        selectedColor: Colors.purple,
+      ),
+      if (_isPhotographer)
+        SalomonBottomBarItem(
+          icon: const Icon(Icons.history),
+          title: const Text('History'),
+          selectedColor: Colors.teal,
+        )
+      else if (_isClient)
+        SalomonBottomBarItem(
+          icon: const Icon(Icons.bookmark),
+          title: const Text('Saved'),
+          selectedColor: Colors.teal,
+        ),
       SalomonBottomBarItem(
-        icon: const Icon(Icons.bookmark),
-        title: const Text('Saved'),
+        icon: Icon(_isPhotographer ? Icons.add_circle : Icons.search),
+        title: Text(_isPhotographer ? "Create" : "Search"),
+        selectedColor: _isPhotographer ? Colors.green : Colors.orange,
+      ),
+
+      // vvv----- MODIFIED ITEM HERE -----vvv
+      SalomonBottomBarItem(
+        // 2. Use the local variable for the check and the widget
+        icon:
+            (localPhotoUrl != null && localPhotoUrl.isNotEmpty)
+                ? ClipRRect(
+                  borderRadius: BorderRadius.circular(6.0),
+                  child: Image.network(
+                    localPhotoUrl, // No "!" needed, the error is gone
+                    width: 28,
+                    height: 28,
+                    fit: BoxFit.cover,
+                  ),
+                )
+                : const Icon(Icons.person),
+        title: Text(_isPhotographer ? "Fotografer" : "Profile"),
         selectedColor: Colors.teal,
       ),
-    SalomonBottomBarItem(
-      icon: Icon(_isPhotographer ? Icons.add_circle : Icons.search),
-      title: Text(_isPhotographer ? "Create" : "Search"),
-      selectedColor: _isPhotographer ? Colors.green : Colors.orange,
-    ),
-    SalomonBottomBarItem(
-      icon: const Icon(Icons.person),
-      title: const Text("Profile"),
-      selectedColor: Colors.teal,
-    ),
-    SalomonBottomBarItem(
-      icon: const Icon(Icons.settings),
-      title: const Text("Settings"),
-      selectedColor: Colors.grey,
-    ),
-  ];
+
+      // ^^^----- END OF MODIFIED ITEM -----^^^
+      SalomonBottomBarItem(
+        icon: const Icon(Icons.settings),
+        title: const Text("Settings"),
+        selectedColor: Colors.grey,
+      ),
+    ];
+  }
 
   Widget _buildEmptyFollowing() => const Center(
     child: Text(
@@ -433,7 +456,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         return Builder(
           builder: (context) {
             try {
-              return const ProfilePage();
+              return _isPhotographer
+                  ? const ProfilePage()
+                  : const ProfilePage();
             } catch (e) {
               return const Center(child: Text('Profile'));
             }

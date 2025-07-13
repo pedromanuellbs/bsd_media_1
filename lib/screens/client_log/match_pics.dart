@@ -22,17 +22,35 @@ class _MatchPicsPageState extends State<MatchPicsPage> {
   Map<String, dynamic>? _sessionDetails;
   bool _isLoadingDetails = false;
 
+  @override
+  void initState() {
+    super.initState();
+    // Initialize localization for DateFormat
+    Intl.defaultLocale = 'id_ID';
+  }
+
   void _showPhoto(Map<String, dynamic> photo) {
     setState(() {
       _selectedPhoto = photo;
-      _sessionDetails = null;
+      _sessionDetails =
+          null; // Reset session details when a new photo is selected
       _isLoadingDetails = true;
     });
-    _fetchSessionDetails(photo['sessionId']);
+    final sessionIdFromPhoto = photo['sessionId'] as String?;
+    print(
+      'DEBUG: _showPhoto - Session ID from photo: $sessionIdFromPhoto',
+    ); // Debug print
+    _fetchSessionDetails(sessionIdFromPhoto);
   }
 
   Future<void> _fetchSessionDetails(String? sessionId) async {
-    if (sessionId == null) {
+    print(
+      'DEBUG: _fetchSessionDetails - Attempting to fetch session details for ID: $sessionId',
+    ); // Debug print
+    if (sessionId == null || sessionId.isEmpty) {
+      print(
+        'ERROR: _fetchSessionDetails - Session ID is null or empty. Cannot fetch details.',
+      ); // Debug print
       setState(() => _isLoadingDetails = false);
       return;
     }
@@ -45,28 +63,57 @@ class _MatchPicsPageState extends State<MatchPicsPage> {
 
       if (sessionDoc.exists) {
         final details = sessionDoc.data()!;
+        print(
+          'DEBUG: _fetchSessionDetails - Session document found. Data: $details',
+        ); // Debug print
         final photographerId = details['photographerId'];
         String photographerName = 'Fotografer tidak diketahui';
 
-        if (photographerId != null) {
+        if (photographerId != null && photographerId.isNotEmpty) {
           final userDoc =
               await FirebaseFirestore.instance
-                  .collection('users')
+                  .collection('users') // Collection for user details
                   .doc(photographerId)
                   .get();
           if (userDoc.exists) {
             photographerName = userDoc.data()?['nama'] ?? photographerName;
+            print(
+              'DEBUG: _fetchSessionDetails - Photographer name fetched: $photographerName',
+            ); // Debug print
+          } else {
+            print(
+              'WARNING: _fetchSessionDetails - Photographer document not found for ID: $photographerId',
+            ); // Debug print
           }
+        } else {
+          print(
+            'WARNING: _fetchSessionDetails - photographerId is null or empty in session details.',
+          ); // Debug print
         }
         details['photographerName'] = photographerName;
         setState(() {
           _sessionDetails = details;
+          _isLoadingDetails =
+              false; // Set to false here once details are loaded
+        });
+      } else {
+        print(
+          'ERROR: _fetchSessionDetails - Session document NOT FOUND for ID: $sessionId',
+        ); // Debug print
+        setState(() {
+          _sessionDetails =
+              null; // Ensure details are null if doc doesn't exist
+          _isLoadingDetails = false;
         });
       }
     } catch (e) {
-      print('Error fetching session details: $e');
-    } finally {
-      setState(() => _isLoadingDetails = false);
+      print(
+        'CRITICAL ERROR: _fetchSessionDetails - Error fetching session details for ID $sessionId: $e',
+      ); // Debug print
+      setState(() {
+        _sessionDetails = null; // Ensure details are null on error
+        _isLoadingDetails = false;
+      });
     }
   }
 
@@ -81,11 +128,15 @@ class _MatchPicsPageState extends State<MatchPicsPage> {
       return 'Tanggal tidak diketahui';
     }
     try {
+      // The date format from Firebase (e.g., "2025-05-13") is YYYY-MM-DD
       final DateFormat formatter = DateFormat('d MMMM yyyy', 'id_ID');
       final DateTime dateTime = DateTime.parse(dateString);
       return formatter.format(dateTime);
     } catch (e) {
-      return dateString;
+      print(
+        'ERROR: _formatDate - Error parsing date: $dateString, Error: $e',
+      ); // Debug print
+      return dateString; // Return original string if parsing fails
     }
   }
 
@@ -116,6 +167,7 @@ class _MatchPicsPageState extends State<MatchPicsPage> {
                 itemCount: widget.matchedPhotos.length,
                 itemBuilder: (context, index) {
                   final photo = widget.matchedPhotos[index];
+                  // Use webContentLink for better quality if available, fallback to thumbnailLink
                   final thumbUrl =
                       photo['webContentLink'] ?? photo['thumbnailLink'] ?? '';
                   return GestureDetector(
@@ -188,7 +240,8 @@ class _MatchPicsPageState extends State<MatchPicsPage> {
                                   // --- PERUBAHAN: Aksi tombol "Tebus Foto ini" ---
                                   ElevatedButton(
                                     onPressed:
-                                        (_sessionDetails != null)
+                                        (_sessionDetails != null &&
+                                                !_isLoadingDetails) // Enable button if details are loaded and not currently loading
                                             ? () {
                                               Navigator.of(context).push(
                                                 MaterialPageRoute(
@@ -202,7 +255,7 @@ class _MatchPicsPageState extends State<MatchPicsPage> {
                                                 ),
                                               );
                                             }
-                                            : null, // Disable tombol jika detail belum dimuat
+                                            : null, // Disable tombol jika detail belum dimuat atau sedang dimuat
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor:
                                           Theme.of(context).primaryColor,
