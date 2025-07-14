@@ -11,6 +11,8 @@ import 'package:http/http.dart' as http;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:camera/camera.dart'; // UBAHAN: Import package camera
 
+// import 'package:../bsd_media/search.dart';
+import 'search.dart'; // langsung, tanpa ../
 import '../fg_log/create_fg.dart';
 import '../fg_log/history_fg.dart';
 import 'profile_page.dart';
@@ -344,7 +346,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       case 1:
         return _isPhotographer ? 'History' : 'Saved';
       case 2:
-        return _isPhotographer ? 'Buat Sesi Foto' : 'Search';
+        return _isPhotographer ? 'Buat Sesi Foto' : 'Cari Fotografer';
       case 3:
         return _isPhotographer ? 'Profile' : 'Profile';
       case 4:
@@ -442,23 +444,23 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         if (_isPhotographer) {
           return const HistoryFGPage();
         } else if (_isClient) {
-          return const SavedPage(); // << Ganti '=' menjadi 'return'
+          return const SavedPage();
         } else {
-          return const SizedBox.shrink(); // << Ganti '=' menjadi 'return'
+          return const SizedBox.shrink();
         }
-      // 'break' tidak diperlukan lagi karena semua jalur sudah 'return'
       case 2:
-        return _isPhotographer
-            ? const CreateFGForm()
-            : const Center(child: Text('Search'));
+        if (_isPhotographer) {
+          return const CreateFGForm();
+        } else if (_isClient) {
+          return const PhotographerSearchPage();
+        } else {
+          return const SizedBox.shrink();
+        }
       case 3:
-        // Gabung: tampilkan ProfilePage, fallback ke Text jika error
         return Builder(
           builder: (context) {
             try {
-              return _isPhotographer
-                  ? const ProfilePage()
-                  : const ProfilePage();
+              return const ProfilePage();
             } catch (e) {
               return const Center(child: Text('Profile'));
             }

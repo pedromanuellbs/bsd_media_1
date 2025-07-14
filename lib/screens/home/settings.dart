@@ -1,13 +1,8 @@
 // screens/home/settings.dart
-
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-
-// Alias import main.dart supaya toggleTheme dikenali
 import 'package:bsd_media/main.dart' as root_app;
-// Import halaman SignIn untuk tombol Sign out
 import 'package:bsd_media/screens/auth/sign_in.dart';
-// Import Line Awesome Flutter icon set
 import 'package:line_awesome_flutter/line_awesome_flutter.dart';
 
 class SettingsPage2 extends StatelessWidget {
@@ -16,25 +11,14 @@ class SettingsPage2 extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    const leftPadding = 72.0; // Sejajar dengan judul AppBar
 
     return Scaffold(
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.only(
-            left: leftPadding,
-            right: 16,
-            top: 16,
-            bottom: 16,
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
           children: [
-            const Padding(
-              padding: EdgeInsets.only(bottom: 8),
-              child: Text(
-                'General',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-            ),
+            // Section: General
+            const _SectionTitle('General'),
             _CustomListTile(
               title: 'Dark Mode',
               icon: Icons.dark_mode_outlined,
@@ -52,27 +36,21 @@ class SettingsPage2 extends StatelessWidget {
               icon: CupertinoIcons.lock_shield,
             ),
 
-            const Divider(height: 32),
-            const Padding(
-              padding: EdgeInsets.only(bottom: 8),
-              child: Text(
-                'Organization',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-            ),
+            const SizedBox(height: 16),
+            const Divider(),
+            const _SectionTitle('Organization'),
             const _CustomListTile(
               title: 'People',
               icon: Icons.contacts_outlined,
             ),
-
-            // Tile “Cara Kerja” pakai icon user-cog dari Line Awesome
             _CustomListTile(
               title: 'Cara Kerja',
               icon: LineAwesomeIcons.user_cog_solid,
               onTap: () {},
             ),
 
-            const Divider(height: 32),
+            const SizedBox(height: 16),
+            const Divider(),
             _CustomListTile(
               title: 'Bahasa',
               icon: LineAwesomeIcons.language_solid,
@@ -116,7 +94,6 @@ class SettingsPage2 extends StatelessWidget {
                         TextButton(
                           child: const Text('OK'),
                           onPressed: () {
-                            // This closes the dialog
                             Navigator.of(context).pop();
                           },
                         ),
@@ -143,6 +120,24 @@ class SettingsPage2 extends StatelessWidget {
   }
 }
 
+class _SectionTitle extends StatelessWidget {
+  final String title;
+  const _SectionTitle(this.title, {super.key});
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(left: 8, top: 8, bottom: 8),
+    child: Text(
+      title,
+      style: const TextStyle(
+        fontSize: 16,
+        fontWeight: FontWeight.bold,
+        color: Colors.black54,
+      ),
+    ),
+  );
+}
+
 class _CustomListTile extends StatelessWidget {
   final String title;
   final IconData icon;
@@ -160,11 +155,12 @@ class _CustomListTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: Icon(icon),
+      minLeadingWidth: 32, // Biar icon selalu rata kiri
+      leading: Icon(icon, size: 26),
       title: Text(title),
       trailing: trailing,
       onTap: onTap,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 8),
     );
   }
 }

@@ -9,8 +9,10 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import '../screens/client_log/match_pics.dart';
 
-// ===== FUNGSI: MELAKUKAN PENCARIAN FOTO SECARA LANGSUNG =====
-Future<Map<String, dynamic>?> findMyPhotos(File faceFile) async {
+Future<Map<String, dynamic>?> findMyPhotos(
+  File faceFile, {
+  List<String>? driveLinks,
+}) async {
   final url = Uri.parse(
     'https://backendlbphbsdmedia-production.up.railway.app/find_my_photos',
   );
@@ -18,11 +20,13 @@ Future<Map<String, dynamic>?> findMyPhotos(File faceFile) async {
   var request = http.MultipartRequest('POST', url);
   request.files.add(await http.MultipartFile.fromPath('image', faceFile.path));
 
+  if (driveLinks != null && driveLinks.isNotEmpty) {
+    request.fields['drive_links'] = jsonEncode(driveLinks);
+  }
+
   try {
     final response = await request.send().timeout(
-      const Duration(
-        seconds: 350, // Pastikan timeout sudah diperpanjang
-      ),
+      const Duration(seconds: 350),
       onTimeout: () => throw TimeoutException('Request timeout'),
     );
 
@@ -75,10 +79,14 @@ Future<Map<String, dynamic>?> findMyPhotos(File faceFile) async {
 class FaceCapturePage extends StatefulWidget {
   final CameraDescription camera;
   final bool isClient;
+  final List<String>? driveLinks;
+  final Map<String, dynamic>? sessionDetailsMap;
 
   const FaceCapturePage({
     required this.camera,
     required this.isClient,
+    this.driveLinks,
+    this.sessionDetailsMap,
     Key? key,
   }) : super(key: key);
 
@@ -140,10 +148,13 @@ class _FaceCapturePageState extends State<FaceCapturePage> {
           _status = 'Memproses...';
         });
 
-        final searchResult = await findMyPhotos(faceFile);
+        final searchResult = await findMyPhotos(
+          faceFile,
+          driveLinks: widget.driveLinks,
+        );
 
         if (mounted) {
-          Navigator.pop(context); // Tutup dialog
+          Navigator.pop(context);
 
           if (searchResult != null && searchResult['success'] == true) {
             final List matchedPhotos = searchResult['matched_photos'] ?? [];
@@ -159,17 +170,23 @@ class _FaceCapturePageState extends State<FaceCapturePage> {
               'DEBUG_FLUTTER: Full searchResult from backend: $searchResult',
             );
 
-            // --- PERUBAHAN DI SINI: SELALU NAVIGASI JIKA PENCARIAN BERHASIL ---
+            print(
+              "DEBUG sessionDetailsMap keys: ${widget.sessionDetailsMap?.keys}",
+            );
+            print(
+              "DEBUG matchedPhotos sessionIds: ${matchedPhotos.map((p) => p['sessionId']).toList()}",
+            );
+
             Navigator.push(
               context,
               MaterialPageRoute(
                 builder:
                     (_) => MatchPicsPage(
                       matchedPhotos: matchedPhotos.cast<Map<String, dynamic>>(),
+                      sessionDetailsMap: widget.sessionDetailsMap,
                     ),
               ),
             );
-            // --- AKHIR PERUBAHAN ---
           } else {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -182,14 +199,14 @@ class _FaceCapturePageState extends State<FaceCapturePage> {
         }
       } else {
         if (mounted) {
-          Navigator.pop(context); // Tutup dialog
+          Navigator.pop(context);
           Navigator.pop(context, faceFile);
         }
       }
     } catch (e) {
       debugPrint('❌ Error proses foto: $e');
       if (mounted) {
-        Navigator.pop(context); // Tutup dialog
+        Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Terjadi error: ${e.toString()}')),
         );

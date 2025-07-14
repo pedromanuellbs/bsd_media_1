@@ -2,9 +2,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-// 1️⃣ Storage tidak lagi dipakai, jadi import-nya bisa dihapus.
-// import 'package:firebase_storage/firebase_storage.dart';
-
 import '../home/saved.dart'; // --- TAMBAHAN: halaman Saved
 
 class QrisPage extends StatefulWidget {
@@ -32,7 +29,6 @@ class _QrisPageState extends State<QrisPage> {
     _fetchQrisImageUrl();
   }
 
-  /// 2️⃣ Mendapatkan URL QRIS langsung dari dokumen `users/{photographerId}`
   Future<void> _fetchQrisImageUrl() async {
     try {
       final userSnap =
@@ -42,7 +38,6 @@ class _QrisPageState extends State<QrisPage> {
               .get();
 
       if (userSnap.exists) {
-        // Pastikan key persis sama seperti di Firestore
         final url = userSnap.data()?['qrisUrl'] as String?;
         if (url != null && url.isNotEmpty) {
           setState(() => _qrisImageUrl = url);
@@ -70,9 +65,14 @@ class _QrisPageState extends State<QrisPage> {
     }
 
     try {
+      // Ambil waktu tebus (UTC, waktu server)
+      final now = DateTime.now();
+      final expiredAt = now.add(const Duration(days: 30));
+
       final dataToSave = {
         ...widget.photoDetails,
-        'purchasedAt': FieldValue.serverTimestamp(),
+        'redeemedAt': Timestamp.fromDate(now),
+        'expiredAt': Timestamp.fromDate(expiredAt),
       };
 
       await FirebaseFirestore.instance

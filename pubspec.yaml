@@ -42,6 +42,8 @@ dependencies:
   firebase_storage_web: ^3.10.14
   cloud_functions: any
 
+  flutter_downloader: ^1.11.6
+
   #donlot
   # gallery_saver: ^2.3.2
   # image_gallery_saver: ^2.0.3

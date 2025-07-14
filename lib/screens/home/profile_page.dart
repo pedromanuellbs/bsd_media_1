@@ -17,9 +17,7 @@ class _ProfilePageState extends State<ProfilePage> {
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      return const Scaffold(
-        body: Center(child: Text('Not logged in')),
-      );
+      return const Scaffold(body: Center(child: Text('Not logged in')));
     }
     return Scaffold(
       // appBar: AppBar(
@@ -27,7 +25,8 @@ class _ProfilePageState extends State<ProfilePage> {
       //   backgroundColor: Colors.deepPurple,
       // ),
       body: FutureBuilder<DocumentSnapshot>(
-        future: FirebaseFirestore.instance.collection('users').doc(user.uid).get(),
+        future:
+            FirebaseFirestore.instance.collection('users').doc(user.uid).get(),
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
@@ -45,20 +44,22 @@ class _ProfilePageState extends State<ProfilePage> {
                   child: CircleAvatar(
                     radius: 56,
                     backgroundColor: Colors.deepPurple,
-                    backgroundImage: (photoUrl != null && photoUrl.isNotEmpty)
-                        ? NetworkImage(photoUrl)
-                        : null,
-                    child: (photoUrl == null || photoUrl.isEmpty)
-                        ? Text(
-                            username.isNotEmpty
-                                ? username[0].toUpperCase()
-                                : '',
-                            style: const TextStyle(
-                              fontSize: 40,
-                              color: Colors.white,
-                            ),
-                          )
-                        : null,
+                    backgroundImage:
+                        (photoUrl != null && photoUrl.isNotEmpty)
+                            ? NetworkImage(photoUrl)
+                            : null,
+                    child:
+                        (photoUrl == null || photoUrl.isEmpty)
+                            ? Text(
+                              username.isNotEmpty
+                                  ? username[0].toUpperCase()
+                                  : '',
+                              style: const TextStyle(
+                                fontSize: 40,
+                                color: Colors.white,
+                              ),
+                            )
+                            : null,
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -70,17 +71,14 @@ class _ProfilePageState extends State<ProfilePage> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                Text(
-                  email,
-                  style: const TextStyle(
-                    fontSize: 16,
-                  ),
-                ),
+                Text(email, style: const TextStyle(fontSize: 16)),
                 const SizedBox(height: 32),
                 ElevatedButton.icon(
                   onPressed: () async {
                     final updated = await Navigator.of(context).push(
-                      MaterialPageRoute(builder: (context) => const EditProfilePage()),
+                      MaterialPageRoute(
+                        builder: (context) => const EditProfilePage(),
+                      ),
                     );
                     if (updated == true) {
                       setState(() {});
@@ -89,10 +87,11 @@ class _ProfilePageState extends State<ProfilePage> {
                   icon: const Icon(Icons.edit),
                   label: const Text("Edit Profil"),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.deepPurple,
+                    backgroundColor: const Color.fromARGB(255, 255, 255, 255),
                     minimumSize: const Size.fromHeight(40),
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
                 ),
                 // const SizedBox(height: 20),

@@ -3,15 +3,20 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-
 // --- TAMBAHAN: Import halaman payment.dart ---
 import './payment.dart';
 
 class MatchPicsPage extends StatefulWidget {
   final List<Map<String, dynamic>> matchedPhotos;
 
-  const MatchPicsPage({Key? key, required this.matchedPhotos})
-    : super(key: key);
+  // --- TAMBAHAN: MAP SESSION ID TO DETAIL (optional, bisa di-pass dari search.dart) ---
+  final Map<String, dynamic>? sessionDetailsMap;
+
+  const MatchPicsPage({
+    Key? key,
+    required this.matchedPhotos,
+    this.sessionDetailsMap,
+  }) : super(key: key);
 
   @override
   _MatchPicsPageState createState() => _MatchPicsPageState();
@@ -22,35 +27,46 @@ class _MatchPicsPageState extends State<MatchPicsPage> {
   Map<String, dynamic>? _sessionDetails;
   bool _isLoadingDetails = false;
 
+  // === Tambahkan variabel berikut di sini (di dalam _MatchPicsPageState) ===
+  bool _showReportCard = false;
+  int? _selectedReason;
+  final List<String> _reportReasons = [
+    "Foto tidak pantas atau mengandung unsur kekerasan",
+    "Ini bukan saya",
+    "Foto ini melanggar privasi",
+  ];
+
   @override
   void initState() {
     super.initState();
-    // Initialize localization for DateFormat
     Intl.defaultLocale = 'id_ID';
   }
 
   void _showPhoto(Map<String, dynamic> photo) {
     setState(() {
       _selectedPhoto = photo;
-      _sessionDetails =
-          null; // Reset session details when a new photo is selected
+      _sessionDetails = null;
       _isLoadingDetails = true;
+      _showReportCard = false;
+      _selectedReason = null;
     });
     final sessionIdFromPhoto = photo['sessionId'] as String?;
-    print(
-      'DEBUG: _showPhoto - Session ID from photo: $sessionIdFromPhoto',
-    ); // Debug print
     _fetchSessionDetails(sessionIdFromPhoto);
   }
 
   Future<void> _fetchSessionDetails(String? sessionId) async {
-    print(
-      'DEBUG: _fetchSessionDetails - Attempting to fetch session details for ID: $sessionId',
-    ); // Debug print
+    // --- Cek mapping session dari widget, jika ada, langsung pakai (lebih cepat) ---
+    if (sessionId != null &&
+        widget.sessionDetailsMap != null &&
+        widget.sessionDetailsMap!.containsKey(sessionId)) {
+      setState(() {
+        _sessionDetails = widget.sessionDetailsMap![sessionId];
+        _isLoadingDetails = false;
+      });
+      return;
+    }
+    // --- Jika mapping tidak ada, fallback ke Firestore (cara lama) ---
     if (sessionId == null || sessionId.isEmpty) {
-      print(
-        'ERROR: _fetchSessionDetails - Session ID is null or empty. Cannot fetch details.',
-      ); // Debug print
       setState(() => _isLoadingDetails = false);
       return;
     }
@@ -63,55 +79,33 @@ class _MatchPicsPageState extends State<MatchPicsPage> {
 
       if (sessionDoc.exists) {
         final details = sessionDoc.data()!;
-        print(
-          'DEBUG: _fetchSessionDetails - Session document found. Data: $details',
-        ); // Debug print
         final photographerId = details['photographerId'];
         String photographerName = 'Fotografer tidak diketahui';
 
         if (photographerId != null && photographerId.isNotEmpty) {
           final userDoc =
               await FirebaseFirestore.instance
-                  .collection('users') // Collection for user details
+                  .collection('users')
                   .doc(photographerId)
                   .get();
           if (userDoc.exists) {
             photographerName = userDoc.data()?['nama'] ?? photographerName;
-            print(
-              'DEBUG: _fetchSessionDetails - Photographer name fetched: $photographerName',
-            ); // Debug print
-          } else {
-            print(
-              'WARNING: _fetchSessionDetails - Photographer document not found for ID: $photographerId',
-            ); // Debug print
           }
-        } else {
-          print(
-            'WARNING: _fetchSessionDetails - photographerId is null or empty in session details.',
-          ); // Debug print
         }
         details['photographerName'] = photographerName;
         setState(() {
           _sessionDetails = details;
-          _isLoadingDetails =
-              false; // Set to false here once details are loaded
+          _isLoadingDetails = false;
         });
       } else {
-        print(
-          'ERROR: _fetchSessionDetails - Session document NOT FOUND for ID: $sessionId',
-        ); // Debug print
         setState(() {
-          _sessionDetails =
-              null; // Ensure details are null if doc doesn't exist
+          _sessionDetails = null;
           _isLoadingDetails = false;
         });
       }
     } catch (e) {
-      print(
-        'CRITICAL ERROR: _fetchSessionDetails - Error fetching session details for ID $sessionId: $e',
-      ); // Debug print
       setState(() {
-        _sessionDetails = null; // Ensure details are null on error
+        _sessionDetails = null;
         _isLoadingDetails = false;
       });
     }
@@ -120,6 +114,8 @@ class _MatchPicsPageState extends State<MatchPicsPage> {
   void _hidePhoto() {
     setState(() {
       _selectedPhoto = null;
+      _showReportCard = false;
+      _selectedReason = null;
     });
   }
 
@@ -128,15 +124,11 @@ class _MatchPicsPageState extends State<MatchPicsPage> {
       return 'Tanggal tidak diketahui';
     }
     try {
-      // The date format from Firebase (e.g., "2025-05-13") is YYYY-MM-DD
       final DateFormat formatter = DateFormat('d MMMM yyyy', 'id_ID');
       final DateTime dateTime = DateTime.parse(dateString);
       return formatter.format(dateTime);
     } catch (e) {
-      print(
-        'ERROR: _formatDate - Error parsing date: $dateString, Error: $e',
-      ); // Debug print
-      return dateString; // Return original string if parsing fails
+      return dateString;
     }
   }
 
@@ -167,7 +159,6 @@ class _MatchPicsPageState extends State<MatchPicsPage> {
                 itemCount: widget.matchedPhotos.length,
                 itemBuilder: (context, index) {
                   final photo = widget.matchedPhotos[index];
-                  // Use webContentLink for better quality if available, fallback to thumbnailLink
                   final thumbUrl =
                       photo['webContentLink'] ?? photo['thumbnailLink'] ?? '';
                   return GestureDetector(
@@ -176,17 +167,31 @@ class _MatchPicsPageState extends State<MatchPicsPage> {
                     },
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(8.0),
-                      child: GridTile(
-                        child: CachedNetworkImage(
-                          imageUrl: thumbUrl,
-                          fit: BoxFit.cover,
-                          placeholder:
-                              (context, url) => const Center(
-                                child: CircularProgressIndicator(),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          CachedNetworkImage(
+                            imageUrl: thumbUrl,
+                            fit: BoxFit.cover,
+                            placeholder:
+                                (context, url) => const Center(
+                                  child: CircularProgressIndicator(),
+                                ),
+                            errorWidget:
+                                (context, url, error) =>
+                                    const Icon(Icons.error),
+                          ),
+                          Center(
+                            child: Opacity(
+                              opacity: 0.5,
+                              child: Image.asset(
+                                'assets/logo-bsd-media.png',
+                                width: 120,
+                                fit: BoxFit.contain,
                               ),
-                          errorWidget:
-                              (context, url, error) => const Icon(Icons.error),
-                        ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   );
@@ -208,28 +213,41 @@ class _MatchPicsPageState extends State<MatchPicsPage> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            CachedNetworkImage(
-                              imageUrl:
-                                  _selectedPhoto!['webContentLink'] ??
-                                  _selectedPhoto!['thumbnailLink'] ??
-                                  '',
-                              fit: BoxFit.fitWidth,
-                              placeholder:
-                                  (context, url) => const Center(
-                                    child: CircularProgressIndicator(),
-                                  ),
-                              errorWidget:
-                                  (context, url, error) => Container(
-                                    color: Colors.grey[200],
-                                    padding: const EdgeInsets.all(20),
-                                    child: const Center(
-                                      child: Text(
-                                        'Gagal memuat gambar',
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(color: Colors.red),
+                            Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                CachedNetworkImage(
+                                  imageUrl:
+                                      _selectedPhoto!['webContentLink'] ??
+                                      _selectedPhoto!['thumbnailLink'] ??
+                                      '',
+                                  fit: BoxFit.fitWidth,
+                                  placeholder:
+                                      (context, url) => const Center(
+                                        child: CircularProgressIndicator(),
                                       ),
-                                    ),
+                                  errorWidget:
+                                      (context, url, error) => Container(
+                                        color: Colors.grey[200],
+                                        padding: const EdgeInsets.all(20),
+                                        child: const Center(
+                                          child: Text(
+                                            'Gagal memuat gambar',
+                                            textAlign: TextAlign.center,
+                                            style: TextStyle(color: Colors.red),
+                                          ),
+                                        ),
+                                      ),
+                                ),
+                                Opacity(
+                                  opacity: 0.5,
+                                  child: Image.asset(
+                                    'assets/logo-bsd-media.png',
+                                    width: 360,
+                                    fit: BoxFit.contain,
                                   ),
+                                ),
+                              ],
                             ),
                             _buildSessionDetails(),
                             Padding(
@@ -237,11 +255,10 @@ class _MatchPicsPageState extends State<MatchPicsPage> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
-                                  // --- PERUBAHAN: Aksi tombol "Tebus Foto ini" ---
                                   ElevatedButton(
                                     onPressed:
                                         (_sessionDetails != null &&
-                                                !_isLoadingDetails) // Enable button if details are loaded and not currently loading
+                                                !_isLoadingDetails)
                                             ? () {
                                               Navigator.of(context).push(
                                                 MaterialPageRoute(
@@ -255,7 +272,7 @@ class _MatchPicsPageState extends State<MatchPicsPage> {
                                                 ),
                                               );
                                             }
-                                            : null, // Disable tombol jika detail belum dimuat atau sedang dimuat
+                                            : null,
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor:
                                           Theme.of(context).primaryColor,
@@ -274,9 +291,10 @@ class _MatchPicsPageState extends State<MatchPicsPage> {
                                   const SizedBox(height: 8),
                                   OutlinedButton(
                                     onPressed: () {
-                                      print(
-                                        'Laporkan foto: ${_selectedPhoto!['name']}',
-                                      );
+                                      setState(() {
+                                        _showReportCard = true;
+                                        _selectedReason = null;
+                                      });
                                     },
                                     style: OutlinedButton.styleFrom(
                                       foregroundColor: Colors.red,
@@ -292,6 +310,7 @@ class _MatchPicsPageState extends State<MatchPicsPage> {
                                     ),
                                     child: const Text('Laporkan Foto ini'),
                                   ),
+                                  // Card report SUDAH DIPINDAH KE LUAR Card preview!
                                 ],
                               ),
                             ),
@@ -316,6 +335,94 @@ class _MatchPicsPageState extends State<MatchPicsPage> {
                       ),
                     ),
                   ),
+                  // Card report/modal DITAMPILKAN DI LUAR CARD PREVIEW
+                  if (_showReportCard)
+                    Container(
+                      color: Colors.black54,
+                      child: Center(
+                        child: Card(
+                          margin: const EdgeInsets.all(24.0),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16.0),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(20.0),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Text(
+                                  "Laporkan Foto Ini",
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 18,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                const Text(
+                                  "Silakan pilih alasan laporan Anda:",
+                                  textAlign: TextAlign.center,
+                                ),
+                                const SizedBox(height: 16),
+                                ...List.generate(
+                                  _reportReasons.length,
+                                  (i) => RadioListTile<int>(
+                                    value: i,
+                                    groupValue: _selectedReason,
+                                    title: Text(_reportReasons[i]),
+                                    onChanged: (val) {
+                                      setState(() {
+                                        _selectedReason = val;
+                                      });
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceEvenly,
+                                  children: [
+                                    ElevatedButton(
+                                      onPressed:
+                                          _selectedReason == null
+                                              ? null
+                                              : () {
+                                                setState(() {
+                                                  widget.matchedPhotos.remove(
+                                                    _selectedPhoto,
+                                                  );
+                                                  _selectedPhoto = null;
+                                                  _showReportCard = false;
+                                                  _selectedReason = null;
+                                                });
+                                                ScaffoldMessenger.of(
+                                                  context,
+                                                ).showSnackBar(
+                                                  const SnackBar(
+                                                    content: Text(
+                                                      'Laporan sudah terkirim!',
+                                                    ),
+                                                  ),
+                                                );
+                                              },
+                                      child: const Text("Kirim Laporan"),
+                                    ),
+                                    OutlinedButton(
+                                      onPressed: () {
+                                        setState(() {
+                                          _showReportCard = false;
+                                          _selectedReason = null;
+                                        });
+                                      },
+                                      child: const Text("Batal"),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
