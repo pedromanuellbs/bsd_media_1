@@ -21,7 +21,7 @@ Future<Map<String, dynamic>?> findMyPhotos(File faceFile) async {
   try {
     final response = await request.send().timeout(
       const Duration(
-        seconds: 300, // Pastikan timeout sudah diperpanjang
+        seconds: 350, // Pastikan timeout sudah diperpanjang
       ),
       onTimeout: () => throw TimeoutException('Request timeout'),
     );
