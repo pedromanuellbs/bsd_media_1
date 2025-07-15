@@ -19,6 +19,7 @@ import 'profile_page.dart';
 import 'saved.dart';
 import 'settings.dart';
 import '../../face_ai/face_capture_page.dart'; // UBAHAN: Import halaman face capture
+import '../fg_log/history_pay.dart';
 
 // Data class untuk sesi foto
 class _PhotoSessionFeedData {
@@ -230,14 +231,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           isHome
               ? _buildHomeAppBar()
               : AppBar(title: Text(_navTitle(_selectedIndex))),
-      body:
-          isHome
-              ? (_isClient
-                  ? _buildPhotoSessionFeed()
-                  : (_showEmptyFollowing
-                      ? _buildEmptyFollowing()
-                      : _buildPlaceholder(_selectedIndex)))
-              : _buildPlaceholder(_selectedIndex),
+      body: _buildPageBody(_selectedIndex), // Ganti dengan fungsi baru
       bottomNavigationBar: SalomonBottomBar(
         currentIndex: _selectedIndex,
         selectedItemColor: const Color(0xff6200ee),
@@ -251,6 +245,20 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         items: _navItems(),
       ),
     );
+  }
+
+  // FUNGSI INI TARUH DI SINI
+  Widget _buildPageBody(int idx) {
+    // Jika fotografer dan tab pertama, tampilkan HistoryPayPage
+    if (_isPhotographer && idx == 0) {
+      return const HistoryPayPage(); // Import dulu history_pay.dart
+    }
+    // Jika klien dan tab pertama, tampilkan feed
+    if (_isClient && idx == 0) {
+      return _buildPhotoSessionFeed();
+    }
+    // Selain itu, fallback ke _buildPlaceholder
+    return _buildPlaceholder(idx);
   }
 
   PreferredSizeWidget _buildHomeAppBar() => PreferredSize(
@@ -361,11 +369,18 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     final localPhotoUrl = photoUrl;
 
     return [
-      SalomonBottomBarItem(
-        icon: const Icon(Icons.home),
-        title: const Text("Home"),
-        selectedColor: Colors.purple,
-      ),
+      if (_isPhotographer)
+        SalomonBottomBarItem(
+          icon: const Icon(Icons.history),
+          title: const Text("History Pembelian"),
+          selectedColor: Colors.purple,
+        )
+      else
+        SalomonBottomBarItem(
+          icon: const Icon(Icons.home),
+          title: const Text("Home"),
+          selectedColor: Colors.purple,
+        ),
       if (_isPhotographer)
         SalomonBottomBarItem(
           icon: const Icon(Icons.history),
