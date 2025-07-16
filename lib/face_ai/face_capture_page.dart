@@ -11,6 +11,7 @@ import '../screens/client_log/match_pics.dart';
 
 Future<Map<String, dynamic>?> findMyPhotos(
   File faceFile, {
+  required String username,
   List<String>? driveLinks,
 }) async {
   final url = Uri.parse(
@@ -19,6 +20,7 @@ Future<Map<String, dynamic>?> findMyPhotos(
 
   var request = http.MultipartRequest('POST', url);
   request.files.add(await http.MultipartFile.fromPath('image', faceFile.path));
+  request.fields['username'] = username;
 
   if (driveLinks != null && driveLinks.isNotEmpty) {
     request.fields['drive_links'] = jsonEncode(driveLinks);
@@ -79,12 +81,14 @@ Future<Map<String, dynamic>?> findMyPhotos(
 class FaceCapturePage extends StatefulWidget {
   final CameraDescription camera;
   final bool isClient;
+  final String username;
   final List<String>? driveLinks;
   final Map<String, dynamic>? sessionDetailsMap;
 
   const FaceCapturePage({
     required this.camera,
     required this.isClient,
+    required this.username,
     this.driveLinks,
     this.sessionDetailsMap,
     Key? key,
@@ -106,13 +110,7 @@ class _FaceCapturePageState extends State<FaceCapturePage> {
   }
 
   Future<void> _setupCamera() async {
-    final cameras = await availableCameras();
-    int camIndex = cameras.indexWhere(
-      (c) => c.lensDirection == CameraLensDirection.front,
-    );
-    if (camIndex < 0) camIndex = 0;
-
-    _controller = CameraController(cameras[camIndex], ResolutionPreset.medium);
+    _controller = CameraController(widget.camera, ResolutionPreset.medium);
     _initFuture = _controller.initialize();
     if (mounted) setState(() {});
   }
@@ -150,6 +148,7 @@ class _FaceCapturePageState extends State<FaceCapturePage> {
 
         final searchResult = await findMyPhotos(
           faceFile,
+          username: widget.username,
           driveLinks: widget.driveLinks,
         );
 
