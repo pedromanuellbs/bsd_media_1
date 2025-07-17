@@ -4,7 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../home/home.dart';
 import 'sign_up.dart';
-import '../../face_ai/face_capture_page.dart';
+import '../../face_ai/face_login.dart'; // Pastikan sudah mengarah ke face_login.dart
 import 'package:camera/camera.dart';
 
 class SignInPage extends StatefulWidget {
@@ -14,12 +14,10 @@ class SignInPage extends StatefulWidget {
 }
 
 class _SignInPageState extends State<SignInPage> {
-  // Controller untuk masing-masing field
   final TextEditingController _usernameCtrl = TextEditingController();
   final TextEditingController _idMemberCtrl = TextEditingController();
   final TextEditingController _pwCtrl = TextEditingController();
 
-  // Variabel state
   bool _pwVisible = false;
   bool _loading = false;
   bool _isPhotographer = false;
@@ -28,7 +26,6 @@ class _SignInPageState extends State<SignInPage> {
   final _lockedAccountsRef = FirebaseFirestore.instance.collection(
     'locked_accounts',
   );
-
   int _remainingAttempts = 3;
 
   @override
@@ -39,6 +36,7 @@ class _SignInPageState extends State<SignInPage> {
     super.dispose();
   }
 
+  // --- FUNGSI YANG DIPERBAIKI ---
   Future<void> _signIn() async {
     if (_loading) return;
     setState(() => _loading = true);
@@ -48,7 +46,6 @@ class _SignInPageState extends State<SignInPage> {
     print('[DEBUG] Attempting login for: $username');
 
     try {
-      // 1. Find user by username & role
       final userQuery =
           await FirebaseFirestore.instance
               .collection('users')
@@ -70,11 +67,9 @@ class _SignInPageState extends State<SignInPage> {
       final role = userDoc['role'] as String;
       print('[DEBUG] Found user: $email | Role: $role');
 
-      // 2. Check if locked
       final locked = await _lockedAccountsRef.doc(email).get();
       if (locked.exists) throw 'Akun terkunci. Silakan reset password.';
 
-      // 3. Jika klien dan mengisi ID Member, validasi
       if (!_isPhotographer && _idMemberCtrl.text.trim().isNotEmpty) {
         final String inputCode = _idMemberCtrl.text.trim();
         final String? dbMemberCode =
@@ -89,58 +84,50 @@ class _SignInPageState extends State<SignInPage> {
         }
       }
 
-      // 4. Authenticate
       final cred = await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: email,
         password: password,
       );
       print('[DEBUG] Login success! UID: ${cred.user?.uid}');
 
-      // 5. Ambil UID user login
-      final user = FirebaseAuth.instance.currentUser;
-      final uid = user?.uid;
+      // --- PERBAIKAN DIMULAI DI SINI ---
+      final uid = cred.user?.uid;
+
+      // 1. Tambahkan pengecekan null untuk UID
+      if (uid == null || uid.isEmpty) {
+        throw 'Gagal mendapatkan data user setelah login. Coba lagi.';
+      }
       print('[DEBUG] Firebase UID user login: $uid');
+      // --- PERBAIKAN SELESAI DI SINI ---
 
-      // 6. Ambil data user dari Firestore berdasarkan UID (opsional)
-      final userDocByUid =
-          await FirebaseFirestore.instance.collection('users').doc(uid).get();
-      final facePhotoUrl = userDocByUid.data()?['facePhotoUrl'];
-      print('[DEBUG] facePhotoUrl: $facePhotoUrl');
-
-      // 7. Reset login attempts jika berhasil
       await _attemptsRef.doc(username).delete();
 
-      // === Tambahan: Face Verification untuk klien ===
       if (!_isPhotographer) {
-        // 1. Ambil kamera depan (non-nullable)
         final cameras = await availableCameras();
         final CameraDescription frontCamera = cameras.firstWhere(
           (cam) => cam.lensDirection == CameraLensDirection.front,
           orElse: () => cameras.first,
         );
 
-        // 2. Pindah ke FaceCapturePage dan tunggu hasilnya
+        // 2. Sekarang kita yakin 'uid' tidak kosong saat dikirim
         final bool? faceVerified = await Navigator.push<bool>(
           context,
           MaterialPageRoute(
             builder:
-                (_) => FaceCapturePage(
+                (_) => FaceLoginPage(
                   camera: frontCamera,
                   isClient: true,
-                  username:
-                      username, // Kirim username user yang login ke FaceCapturePage
+                  username: _usernameCtrl.text.trim(),
                 ),
           ),
         );
 
         if (faceVerified == true) {
-          // Lanjut ke Home jika verifikasi wajah berhasil
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (_) => const HomePage()),
           );
         } else {
-          // Jika gagal, tampilkan alert dan logout
           await FirebaseAuth.instance.signOut();
           _showError('Deteksi Wajah Tidak Sama, harap daftar!');
         }
@@ -148,7 +135,6 @@ class _SignInPageState extends State<SignInPage> {
         return;
       }
 
-      // === Fotografer langsung ke Home ===
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const HomePage()),
@@ -297,7 +283,6 @@ class _SignInPageState extends State<SignInPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Username form (always shown)
               TextFormField(
                 controller: _usernameCtrl,
                 decoration: InputDecoration(
@@ -309,8 +294,6 @@ class _SignInPageState extends State<SignInPage> {
                 ),
               ),
               const SizedBox(height: 12),
-
-              // ID Member BSD MEDIA (only for client, optional)
               if (!_isPhotographer)
                 Column(
                   children: [
@@ -324,8 +307,6 @@ class _SignInPageState extends State<SignInPage> {
                     const SizedBox(height: 12),
                   ],
                 ),
-
-              // Password field
               TextFormField(
                 controller: _pwCtrl,
                 obscureText: !_pwVisible,
@@ -344,15 +325,11 @@ class _SignInPageState extends State<SignInPage> {
                 ),
               ),
               const SizedBox(height: 8),
-
-              // Info attempts jika gagal
               if (_remainingAttempts < 3)
                 Text(
                   'Percobaan login tersisa: $_remainingAttempts',
                   style: const TextStyle(color: Colors.red, fontSize: 13),
                 ),
-
-              // Toggle link (Klien <-> Fotografer)
               Align(
                 alignment: Alignment.centerLeft,
                 child: TextButton(
@@ -368,10 +345,7 @@ class _SignInPageState extends State<SignInPage> {
                   style: TextButton.styleFrom(padding: EdgeInsets.zero),
                 ),
               ),
-
               const SizedBox(height: 8),
-
-              // Sign In button
               ElevatedButton(
                 onPressed: _loading ? null : _signIn,
                 style: ElevatedButton.styleFrom(
@@ -387,10 +361,7 @@ class _SignInPageState extends State<SignInPage> {
                         ? const CircularProgressIndicator()
                         : const Text('Sign In'),
               ),
-
               const SizedBox(height: 8),
-
-              // Sign Up link
               TextButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.deepPurple.shade50,
@@ -407,9 +378,7 @@ class _SignInPageState extends State<SignInPage> {
                     ),
                 child: const Text('Sign Up'),
               ),
-
               const SizedBox(height: 12),
-
               TextButton(
                 onPressed: _resetPassword,
                 child: const Text('Lupa Password?'),

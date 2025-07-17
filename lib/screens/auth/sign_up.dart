@@ -17,12 +17,12 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 enum _SignUpMode { selection, client, photographer }
 
-// Tambahan untuk multiple choice member status
 enum MemberStatus { member, nonMember }
 
+// Fungsi untuk memanggil endpoint register_face di backend
 Future<bool> registerFaceLBPH(File faceImage, String userId) async {
   print(
-    'DEBUG: file path: ${faceImage.path}, exists: ${await faceImage.exists()}, length: ${await faceImage.length()}',
+    'DEBUG: Mengirim data ke backend. UserID: $userId, Path: ${faceImage.path}',
   );
 
   final uri = Uri.parse(
@@ -36,7 +36,7 @@ Future<bool> registerFaceLBPH(File faceImage, String userId) async {
   final resp = await req.send();
   final body = await resp.stream.bytesToString();
 
-  print('DEBUG: status=${resp.statusCode}, body=$body');
+  print('DEBUG: Backend Response -> status=${resp.statusCode}, body=$body');
 
   if (resp.statusCode == 200) {
     final jsonResp = json.decode(body);
@@ -102,17 +102,13 @@ class _SignUpPageState extends State<SignUpPage> {
   final _pC = TextEditingController();
   final _cC = TextEditingController();
   bool _pwVis = false, _cpwVis = false, _loading = false, _agreedEula = false;
-  bool _faceRegistered = false;
+
+  // PERUBAHAN: Variabel untuk menyimpan file foto yang diambil
   File? _faceFile;
 
-  // Tambahan untuk benefit preview
   bool _showBenefitCard = false;
-
-  // Untuk card kode member
   bool _showMemberCodeCard = false;
   String? _memberCode;
-
-  // Tambahkan untuk member status
   MemberStatus? _memberStatus;
 
   @override
@@ -148,6 +144,7 @@ class _SignUpPageState extends State<SignUpPage> {
   }
 
   void _showError(String msg) {
+    if (!mounted) return;
     showDialog(
       context: context,
       builder:
@@ -160,6 +157,154 @@ class _SignUpPageState extends State<SignUpPage> {
                 child: const Text('OK'),
               ),
             ],
+          ),
+    );
+  }
+
+  // Fungsi untuk menangani keseluruhan proses registrasi klien
+  Future<void> _handleClientRegistration() async {
+    // Validasi awal
+    if (!_formKey.currentState!.validate() || !_agreedEula) {
+      _showError("Harap isi semua data dan setujui perjanjian privasi.");
+      return;
+    }
+    if (_faceFile == null) {
+      _showError("Harap lakukan pengambilan foto wajah terlebih dahulu.");
+      return;
+    }
+    if (_memberStatus == null) {
+      _showError("Harap pilih status keanggotaan Anda.");
+      return;
+    }
+
+    setState(() => _loading = true);
+
+    UserCredential? cred; // Simpan kredensial untuk potensi rollback
+
+    try {
+      // LANGKAH 1: Buat user di Firebase Authentication
+      print("Mencoba membuat user di Firebase Auth...");
+      cred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: _eC.text.trim(),
+        password: _pC.text.trim(),
+      );
+      final uid = cred.user?.uid;
+
+      if (uid == null) {
+        throw 'Gagal mendapatkan UID setelah membuat akun.';
+      }
+      print("User berhasil dibuat di Auth. UID: $uid");
+
+      // LANGKAH 2: Kirim foto dan UID ke backend untuk registrasi wajah
+      print("Mengirim data wajah ke backend...");
+      final bool faceSuccess = await registerFaceLBPH(_faceFile!, uid);
+
+      if (!faceSuccess) {
+        throw 'Registrasi wajah di backend gagal. Silakan coba lagi.';
+      }
+      print("Registrasi wajah di backend berhasil.");
+
+      // LANGKAH 3: Simpan data user ke Firestore
+      print("Menyimpan data user ke Firestore...");
+      String? newMemberCode;
+      if (_memberStatus == MemberStatus.member) {
+        final random = Random();
+        newMemberCode = 'BSDMEDIA${random.nextInt(900000) + 100000}';
+      }
+
+      await FirebaseFirestore.instance.collection('users').doc(uid).set({
+        'username': _uC.text.trim(),
+        'email': _eC.text.trim(),
+        'role': 'client',
+        'face_registered': true,
+        'member_status':
+            _memberStatus == MemberStatus.member ? 'member' : 'non_member',
+        'member_code': newMemberCode,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      print("Data user berhasil disimpan di Firestore.");
+
+      // LANGKAH 4: Tampilkan dialog sukses
+      if (_memberStatus == MemberStatus.member) {
+        await _showMemberCodeDialog(newMemberCode!);
+      }
+      await _showSuccessAndGoLogin();
+    } on FirebaseAuthException catch (e) {
+      _showError(e.message ?? 'Gagal registrasi akun Firebase.');
+    } catch (e) {
+      // Rollback: Hapus user dari Auth jika langkah setelahnya gagal
+      if (cred?.user != null) {
+        print(
+          "Terjadi error, melakukan rollback dengan menghapus user dari Auth...",
+        );
+        await cred!.user!.delete();
+        print("User berhasil dihapus dari Auth.");
+      }
+      _showError(e.toString());
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  // Fungsi untuk menampilkan dialog kode member
+  Future<void> _showMemberCodeDialog(String code) async {
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder:
+          (context) => Dialog(
+            backgroundColor: Colors.transparent,
+            child: Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: Colors.deepPurple.shade50,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    "Kode Member BSD Media kamu:",
+                    style: TextStyle(
+                      color: Colors.deepPurple[900],
+                      fontWeight: FontWeight.bold,
+                      fontSize: 17,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  SelectableText(
+                    code,
+                    style: TextStyle(
+                      color: Colors.deepPurple,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 24,
+                      letterSpacing: 2,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Text(
+                    "Kode ini bisa digunakan untuk verifikasi keanggotaan.",
+                    style: TextStyle(
+                      color: Colors.deepPurple[900],
+                      fontSize: 14,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text(
+                        "Lanjut",
+                        style: TextStyle(color: Colors.deepPurple),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
     );
   }
@@ -267,13 +412,11 @@ class _SignUpPageState extends State<SignUpPage> {
                 validator: (v) => v != _pC.text ? 'Tidak cocok' : null,
               ),
               const SizedBox(height: 16),
-
-              // Multiple choice Member BSD Media
               Row(
                 children: [
                   Expanded(
                     child: RadioListTile<MemberStatus>(
-                      title: const Text('Member BSD Media'),
+                      title: const Text('Member'),
                       value: MemberStatus.member,
                       groupValue: _memberStatus,
                       onChanged: (MemberStatus? value) {
@@ -285,7 +428,7 @@ class _SignUpPageState extends State<SignUpPage> {
                   ),
                   Expanded(
                     child: RadioListTile<MemberStatus>(
-                      title: const Text('Bukan Member BSD Media'),
+                      title: const Text('Bukan Member'),
                       value: MemberStatus.nonMember,
                       groupValue: _memberStatus,
                       onChanged: (MemberStatus? value) {
@@ -297,10 +440,7 @@ class _SignUpPageState extends State<SignUpPage> {
                   ),
                 ],
               ),
-
               const SizedBox(height: 4),
-
-              // Teks klik untuk preview benefit member
               GestureDetector(
                 onTap: () {
                   showDialog(
@@ -338,22 +478,21 @@ class _SignUpPageState extends State<SignUpPage> {
                                     children: [
                                       TextButton(
                                         onPressed: () async {
-                                          // Ganti nomor berikut dengan nomor admin sebenarnya (format internasional tanpa +)
                                           const waUrl =
                                               'https://wa.me/6287818464990';
                                           if (await canLaunch(waUrl)) {
                                             await launch(waUrl);
                                           }
                                         },
-                                        child: Row(
+                                        child: const Row(
                                           children: [
-                                            const FaIcon(
+                                            FaIcon(
                                               FontAwesomeIcons.whatsapp,
                                               color: Colors.green,
                                               size: 20,
                                             ),
-                                            const SizedBox(width: 6),
-                                            const Text(
+                                            SizedBox(width: 6),
+                                            Text(
                                               "WA Admin",
                                               style: TextStyle(
                                                 color: Colors.green,
@@ -381,7 +520,7 @@ class _SignUpPageState extends State<SignUpPage> {
                         ),
                   );
                 },
-                child: Text(
+                child: const Text(
                   'Lihat info benefit member BSD Media',
                   style: TextStyle(
                     color: Colors.deepPurple,
@@ -390,22 +529,14 @@ class _SignUpPageState extends State<SignUpPage> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 10),
 
-              // Face Recognition
+              // PERUBAHAN: Tombol ini hanya untuk mengambil foto
               ElevatedButton(
                 onPressed:
                     _loading
                         ? null
                         : () async {
-                          if (_eC.text.trim().isEmpty) {
-                            _showError(
-                              "Isi email terlebih dahulu sebelum registrasi wajah.",
-                            );
-                            return;
-                          }
-
                           setState(() => _loading = true);
                           try {
                             final cams = await availableCameras();
@@ -416,65 +547,27 @@ class _SignUpPageState extends State<SignUpPage> {
                                     (_) => FaceCapturePage(
                                       camera: cams.first,
                                       isClient: false,
-                                      username:
-                                          _uC.text
-                                              .trim(), // <-- Atau pakai _eC.text.trim()
                                     ),
                               ),
                             );
-
-                            if (foto != null) {
-                              print(
-                                'DEBUG_FLUTTER: File foto diterima dari FaceCapturePage. Path: ${foto.path}, exists: ${await foto.exists()}, length: ${await foto.length()}',
-                              );
-                            } else {
-                              print(
-                                'DEBUG_FLUTTER: FaceCapturePage mengembalikan null atau tidak ada foto.',
-                              );
-                            }
-
                             if (foto != null && await foto.exists()) {
-                              final fileLength = await foto.length();
-                              if (fileLength == 0) {
-                                setState(() => _loading = false);
-                                _showError(
-                                  "File foto hasil capture kosong. Silakan ulangi pengambilan foto.",
-                                );
-                                return;
-                              }
-                              print(
-                                'DEBUG: Siap upload file dengan size: $fileLength bytes',
-                              );
-                              final userId = _eC.text.trim();
-                              final bool success = await registerFaceLBPH(
-                                foto,
-                                userId,
-                              );
                               setState(() {
-                                _loading = false;
-                                _faceRegistered = success;
-                                _faceFile = success ? foto : null;
+                                _faceFile = foto; // Simpan file foto ke state
                               });
                               ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    success
-                                        ? 'Registrasi wajah berhasil!'
-                                        : 'Registrasi wajah gagal! (lihat log untuk detail)',
-                                  ),
+                                const SnackBar(
+                                  content: Text('Foto wajah berhasil diambil!'),
                                 ),
                               );
                             } else {
-                              setState(() => _loading = false);
                               _showError(
                                 "Gagal mengambil foto wajah, coba lagi.",
                               );
                             }
                           } catch (e) {
+                            _showError("Terjadi error saat membuka kamera: $e");
+                          } finally {
                             setState(() => _loading = false);
-                            _showError(
-                              "Terjadi error saat proses registrasi wajah: $e",
-                            );
                           }
                         },
                 style: ElevatedButton.styleFrom(
@@ -488,147 +581,16 @@ class _SignUpPageState extends State<SignUpPage> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                         : Text(
-                          _faceRegistered
-                              ? 'Wajah sudah teregistrasi'
-                              : 'Face Recognition',
+                          _faceFile != null
+                              ? 'Wajah sudah diambil (Ulangi)'
+                              : 'Ambil Foto Wajah',
                         ),
               ),
-
               const SizedBox(height: 8),
 
-              // Register Client
+              // PERUBAHAN: Tombol ini sekarang menjadi satu-satunya pemicu registrasi
               ElevatedButton(
-                onPressed:
-                    (!_faceRegistered || _loading)
-                        ? null
-                        : () async {
-                          if (!_formKey.currentState!.validate() ||
-                              !_agreedEula)
-                            return;
-                          if (_memberStatus == MemberStatus.member) {
-                            // generate kode
-                            final random = Random();
-                            final code =
-                                'BSDMEDIA${random.nextInt(900000) + 100000}';
-                            setState(() {
-                              _memberCode = code;
-                              _showMemberCodeCard = true;
-                            });
-                            // Tampilkan card kode
-                            await showDialog(
-                              context: context,
-                              barrierDismissible: false,
-                              builder:
-                                  (context) => Dialog(
-                                    backgroundColor: Colors.transparent,
-                                    child: Container(
-                                      width: double.infinity,
-                                      decoration: BoxDecoration(
-                                        color: Colors.deepPurple.shade50,
-                                        borderRadius: BorderRadius.circular(16),
-                                      ),
-                                      padding: const EdgeInsets.all(20),
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Text(
-                                            "Kode Member BSD Media kamu:",
-                                            style: TextStyle(
-                                              color: Colors.deepPurple[900],
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 17,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 10),
-                                          SelectableText(
-                                            code,
-                                            style: TextStyle(
-                                              color: Colors.deepPurple,
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 24,
-                                              letterSpacing: 2,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 18),
-                                          Text(
-                                            "Kode ini bisa digunakan untuk verifikasi keanggotaan.",
-                                            style: TextStyle(
-                                              color: Colors.deepPurple[900],
-                                              fontSize: 14,
-                                            ),
-                                            textAlign: TextAlign.center,
-                                          ),
-                                          const SizedBox(height: 16),
-                                          Align(
-                                            alignment: Alignment.centerRight,
-                                            child: TextButton(
-                                              onPressed:
-                                                  () => Navigator.pop(context),
-                                              child: const Text(
-                                                "Lanjut",
-                                                style: TextStyle(
-                                                  color: Colors.deepPurple,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                            );
-                            // Proses simpan ke firebase setelah kode tampil
-                            try {
-                              final cred = await FirebaseAuth.instance
-                                  .createUserWithEmailAndPassword(
-                                    email: _eC.text.trim(),
-                                    password: _pC.text.trim(),
-                                  );
-                              await FirebaseFirestore.instance
-                                  .collection('users')
-                                  .doc(cred.user!.uid)
-                                  .set({
-                                    'username': _uC.text.trim(),
-                                    'email': _eC.text.trim(),
-                                    'role': 'client',
-                                    'face_registered': true,
-                                    'member_status': 'member',
-                                    'member_code': code,
-                                    'createdAt': FieldValue.serverTimestamp(),
-                                  });
-                              await _showSuccessAndGoLogin();
-                            } on FirebaseAuthException catch (e) {
-                              _showError(e.message ?? 'Gagal registrasi');
-                            } finally {
-                              if (mounted) setState(() => _loading = false);
-                            }
-                          } else {
-                            // Non-member: langsung simpan tanpa card kode
-                            try {
-                              final cred = await FirebaseAuth.instance
-                                  .createUserWithEmailAndPassword(
-                                    email: _eC.text.trim(),
-                                    password: _pC.text.trim(),
-                                  );
-                              await FirebaseFirestore.instance
-                                  .collection('users')
-                                  .doc(cred.user!.uid)
-                                  .set({
-                                    'username': _uC.text.trim(),
-                                    'email': _eC.text.trim(),
-                                    'role': 'client',
-                                    'face_registered': true,
-                                    'member_status': 'non_member',
-                                    'createdAt': FieldValue.serverTimestamp(),
-                                  });
-                              await _showSuccessAndGoLogin();
-                            } on FirebaseAuthException catch (e) {
-                              _showError(e.message ?? 'Gagal registrasi');
-                            } finally {
-                              if (mounted) setState(() => _loading = false);
-                            }
-                          }
-                        },
+                onPressed: _loading ? null : _handleClientRegistration,
                 style: ElevatedButton.styleFrom(
                   minimumSize: const Size.fromHeight(48),
                 ),
@@ -645,8 +607,6 @@ class _SignUpPageState extends State<SignUpPage> {
             ],
           ),
         ),
-
-        // EULA overlay
         if (!_agreedEula)
           Positioned.fill(
             child: Container(
@@ -703,6 +663,7 @@ class _SignUpPageState extends State<SignUpPage> {
   }
 
   Widget _photogForm() {
+    // ... (Kode form fotografer tidak diubah, tetap sama)
     return Form(
       key: _formKey,
       child: ListView(

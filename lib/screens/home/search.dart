@@ -235,7 +235,7 @@ class PhotographerProfilePage extends StatelessWidget {
                                     (_) => FaceCapturePage(
                                       camera: frontCamera,
                                       isClient: true,
-                                      username: username,
+                                      // username: username,
                                       driveLinks: driveLinks,
                                       sessionDetailsMap: sessionDetailsMap,
                                     ),

@@ -1,21 +1,24 @@
 // face_ai/face_login.dart
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
-import 'dart:io';
-import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
-import 'dart:convert';
+import 'dart:io';
+import 'dart:convert'; // <--- TAMBAHKAN BARIS INI
 
 class FaceLoginPage extends StatefulWidget {
   final CameraDescription camera;
   final bool isClient;
   final String username;
+  final List<String>? driveLinks;
+  final Map<String, dynamic>? sessionDetailsMap;
 
   const FaceLoginPage({
-    Key? key,
     required this.camera,
     required this.isClient,
     required this.username,
+    this.driveLinks,
+    this.sessionDetailsMap,
+    Key? key,
   }) : super(key: key);
 
   @override
@@ -23,166 +26,167 @@ class FaceLoginPage extends StatefulWidget {
 }
 
 class _FaceLoginPageState extends State<FaceLoginPage> {
-  CameraController? _controller;
-  bool _processing = false;
-  String? _resultMessage;
+  late CameraController _controller;
+  Future<void>? _initFuture;
+  bool _isLoading = false;
+  XFile? _capturedFile; // Untuk preview image sebelum upload
 
   @override
   void initState() {
     super.initState();
-    _initCamera();
-  }
-
-  Future<void> _initCamera() async {
-    _controller = CameraController(
-      widget.camera,
-      ResolutionPreset.medium,
-      enableAudio: false,
-    );
-    await _controller!.initialize();
-    if (mounted) setState(() {});
+    _controller = CameraController(widget.camera, ResolutionPreset.high);
+    _initFuture = _controller.initialize();
   }
 
   @override
   void dispose() {
-    _controller?.dispose();
+    _controller.dispose();
     super.dispose();
   }
 
-  Future<void> _captureAndVerify() async {
-    if (_controller == null || !_controller!.value.isInitialized) return;
+  Future<void> _onCapture() async {
+    try {
+      final XFile file = await _controller.takePicture();
+      setState(() {
+        _capturedFile = file;
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Gagal mengambil gambar: $e')));
+    }
+  }
 
-    setState(() {
-      _processing = true;
-      _resultMessage = null;
-    });
+  // face_ai/face_login.dart
+
+  Future<void> _onUpload() async {
+    if (_capturedFile == null) return;
+    setState(() => _isLoading = true);
 
     try {
-      final tmpDir = await getTemporaryDirectory();
-      final filePath =
-          '${tmpDir.path}/${DateTime.now().millisecondsSinceEpoch}.jpg';
-      await _controller!.takePicture().then(
-        (file) => File(file.path).copySync(filePath),
+      final uri = Uri.parse(
+        'https://backendlbphbsdmedia-production.up.railway.app/face_login',
       );
-
-      // Kirim foto ke backend untuk face verification (find-face-users)
-      final request = http.MultipartRequest(
-        'POST',
-        Uri.parse(
-          'https://backendlbphbsdmedia-production.up.railway.app/find-face-users',
-        ), // GANTI DENGAN URL BACKEND KAMU
+      var request = http.MultipartRequest('POST', uri);
+      // 'username' di sini berisi UID dari Firebase, sesuai kiriman dari sign_in.dart
+      request.fields['username'] =
+          widget.username; // isikan 'dummy9' atau yang diinput user
+      request.files.add(
+        await http.MultipartFile.fromPath('image', _capturedFile!.path),
       );
-      request.fields['user_id'] =
-          widget
-              .username; // Pastikan isinya UID, bukan username jika backend butuh UID
-
-      request.files.add(await http.MultipartFile.fromPath('image', filePath));
 
       final response = await request.send();
+      final responseBody = await response.stream.bytesToString();
 
+      // Pengecekan status code 200 untuk sukses
       if (response.statusCode == 200) {
-        final responseStr = await response.stream.bytesToString();
-        final jsonResp = json.decode(responseStr);
-
-        if (jsonResp['success'] == true &&
-            (jsonResp['matched_photos'] as List).isNotEmpty) {
-          setState(() {
-            _resultMessage = "Autentikasi wajah berhasil. Selamat datang!";
-          });
-          Navigator.pop(
-            context,
-            true,
-          ); // Sukses, kembali ke sign_in dan lanjut ke Home
-        } else {
-          setState(() {
-            _resultMessage = "Autentikasi wajah gagal. Silakan coba lagi.";
-          });
+        // Jika sukses, kembali ke halaman sign_in dengan nilai 'true'
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Verifikasi Wajah Berhasil!')),
+          );
+          Navigator.pop(context, true); // <--- PENTING
         }
       } else {
-        setState(() {
-          _resultMessage = "Terjadi error pada server. Coba lagi nanti.";
-        });
+        // Jika gagal, tampilkan pesan error dan kembali dengan nilai 'false'
+        if (mounted) {
+          // Ambil pesan error dari JSON jika ada
+          final errorMsg =
+              json.decode(responseBody)['error'] ?? 'Verifikasi wajah gagal';
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Gagal: $errorMsg')));
+          Navigator.pop(context, false); // <--- PENTING
+        }
       }
     } catch (e) {
-      setState(() {
-        _resultMessage = "Gagal mengambil gambar atau memproses wajah.";
-      });
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Terjadi error: $e')));
+        Navigator.pop(context, false); // <--- PENTING
+      }
     } finally {
-      setState(() {
-        _processing = false;
-      });
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
+  }
+
+  void _resetCapture() {
+    setState(() {
+      _capturedFile = null;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Scan Wajah Kamu'),
-        backgroundColor: Colors.deepPurple,
-        foregroundColor: Colors.white,
+      appBar: AppBar(title: const Text('Scan Wajah Kamu')),
+      body: Stack(
+        children: [
+          if (_capturedFile == null)
+            FutureBuilder(
+              future: _initFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.done) {
+                  return CameraPreview(_controller);
+                } else {
+                  return const Center(child: CircularProgressIndicator());
+                }
+              },
+            )
+          else
+            Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text('Preview Foto', style: TextStyle(fontSize: 18)),
+                  const SizedBox(height: 16),
+                  Image.file(
+                    File(_capturedFile!.path),
+                    width: 250,
+                    height: 350,
+                    fit: BoxFit.cover,
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      ElevatedButton.icon(
+                        icon: Icon(Icons.check),
+                        label: Text('Pakai Foto Ini'),
+                        onPressed: _isLoading ? null : _onUpload,
+                      ),
+                      const SizedBox(width: 16),
+                      ElevatedButton.icon(
+                        icon: Icon(Icons.refresh),
+                        label: Text('Ulangi'),
+                        onPressed: _isLoading ? null : _resetCapture,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          if (_isLoading)
+            Container(
+              color: Colors.black45,
+              child: const Center(child: CircularProgressIndicator()),
+            ),
+        ],
       ),
-      backgroundColor: Colors.black,
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            if (_controller != null && _controller!.value.isInitialized)
-              SizedBox(
-                width: 220,
-                height: 220,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: CameraPreview(_controller!),
-                ),
+      floatingActionButton:
+          _capturedFile == null
+              ? FloatingActionButton(
+                onPressed: _isLoading ? null : _onCapture,
+                tooltip: 'Ambil Foto',
+                child: const Icon(Icons.camera_alt),
               )
-            else
-              const CircularProgressIndicator(),
-            const SizedBox(height: 24),
-            const Text(
-              'Scan Wajah Kamu',
-              style: TextStyle(
-                fontSize: 26,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(height: 32),
-            ElevatedButton.icon(
-              icon: const Icon(Icons.camera_alt),
-              label: Text(_processing ? 'Memproses...' : 'Capture'),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 36,
-                  vertical: 16,
-                ),
-                backgroundColor: Colors.deepPurple,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                textStyle: const TextStyle(fontSize: 18),
-              ),
-              onPressed: _processing ? null : _captureAndVerify,
-            ),
-            if (_resultMessage != null) ...[
-              const SizedBox(height: 24),
-              Text(
-                _resultMessage!,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color:
-                      _resultMessage!.contains("berhasil")
-                          ? Colors.greenAccent
-                          : Colors.redAccent,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
+              : null,
     );
   }
 }
