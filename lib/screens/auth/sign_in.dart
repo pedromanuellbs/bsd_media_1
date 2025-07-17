@@ -4,7 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../home/home.dart';
 import 'sign_up.dart';
-import '../../face_ai/face_login.dart'; // Pastikan sudah mengarah ke face_login.dart
+import '../../face_ai/face_login.dart';
 import 'package:camera/camera.dart';
 
 class SignInPage extends StatefulWidget {
@@ -63,9 +63,12 @@ class _SignInPageState extends State<SignInPage> {
       }
 
       final userDoc = userQuery.docs.first;
+      final isMember =
+          userDoc['member_status'] ==
+          'member'; // <--- AMBIL STATUS MEMBER DI SINI
       final email = userDoc['email'] as String;
       final role = userDoc['role'] as String;
-      print('[DEBUG] Found user: $email | Role: $role');
+      print('[DEBUG] Found user: $email | Role: $role | isMember: $isMember');
 
       final locked = await _lockedAccountsRef.doc(email).get();
       if (locked.exists) throw 'Akun terkunci. Silakan reset password.';
@@ -93,7 +96,6 @@ class _SignInPageState extends State<SignInPage> {
       // --- PERBAIKAN DIMULAI DI SINI ---
       final uid = cred.user?.uid;
 
-      // 1. Tambahkan pengecekan null untuk UID
       if (uid == null || uid.isEmpty) {
         throw 'Gagal mendapatkan data user setelah login. Coba lagi.';
       }
@@ -125,7 +127,12 @@ class _SignInPageState extends State<SignInPage> {
         if (faceVerified == true) {
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (_) => const HomePage()),
+            MaterialPageRoute(
+              builder:
+                  (_) => HomePage(
+                    isMember: isMember,
+                  ), // <--- KIRIM STATUS MEMBER KE HOMEPAGE
+            ),
           );
         } else {
           await FirebaseAuth.instance.signOut();
@@ -137,7 +144,10 @@ class _SignInPageState extends State<SignInPage> {
 
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const HomePage()),
+        MaterialPageRoute(
+          builder:
+              (_) => HomePage(isMember: isMember), // <--- PASTIKAN DI SINI JUGA
+        ),
       );
     } on FirebaseAuthException catch (e) {
       print('[ERROR] Auth failed: ${e.code}');

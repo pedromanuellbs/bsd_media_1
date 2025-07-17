@@ -79,12 +79,14 @@ Future<Map<String, dynamic>?> findMyPhotos(
 class FaceCapturePage extends StatefulWidget {
   final CameraDescription camera;
   final bool isClient;
+  final bool isMember; // <-- tambahkan baris ini!
   final List<String>? driveLinks;
   final Map<String, dynamic>? sessionDetailsMap;
 
   const FaceCapturePage({
     required this.camera,
     required this.isClient,
+    required this.isMember, // <-- ini sudah benar
     this.driveLinks,
     this.sessionDetailsMap,
     Key? key,
@@ -120,6 +122,12 @@ class _FaceCapturePageState extends State<FaceCapturePage> {
   Future<void> _takePicture() async {
     if (!mounted || !_controller.value.isInitialized) return;
 
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => ProgressDialog(status: _status),
+    );
+
     try {
       final XFile raw = await _controller.takePicture();
       debugPrint(
@@ -137,25 +145,6 @@ class _FaceCapturePageState extends State<FaceCapturePage> {
         'DEBUG_FLUTTER: File foto disimpan. Path: $savePath, exists: ${await faceFile.exists()}, length: ${await faceFile.length()}',
       );
 
-      // Tampilkan preview sebelum proses selanjutnya
-      if (mounted) {
-        final proceed = await showDialog<bool>(
-          context: context,
-          barrierDismissible: false,
-          builder: (_) => PreviewDialog(imageFile: faceFile),
-        );
-        // Jika user memilih ulangi/cancel, jangan lanjut proses
-        if (proceed != true) {
-          return;
-        }
-      }
-
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => ProgressDialog(status: _status),
-      );
-
       if (widget.isClient) {
         setState(() {
           _status = 'Memproses...';
@@ -167,7 +156,7 @@ class _FaceCapturePageState extends State<FaceCapturePage> {
         );
 
         if (mounted) {
-          Navigator.pop(context); // Tutup ProgressDialog
+          Navigator.pop(context);
 
           if (searchResult != null && searchResult['success'] == true) {
             final List matchedPhotos = searchResult['matched_photos'] ?? [];
@@ -197,6 +186,7 @@ class _FaceCapturePageState extends State<FaceCapturePage> {
                     (_) => MatchPicsPage(
                       matchedPhotos: matchedPhotos.cast<Map<String, dynamic>>(),
                       sessionDetailsMap: widget.sessionDetailsMap,
+                      isMember: widget.isMember, // <-- WAJIB ADA!
                     ),
               ),
             );
@@ -251,53 +241,6 @@ class _FaceCapturePageState extends State<FaceCapturePage> {
         onPressed: _takePicture,
         tooltip: 'Ambil Foto',
         child: const Icon(Icons.camera_alt),
-      ),
-    );
-  }
-}
-
-class PreviewDialog extends StatelessWidget {
-  final File imageFile;
-
-  const PreviewDialog({Key? key, required this.imageFile}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: Colors.white,
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Preview Foto',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-            ),
-            const SizedBox(height: 20),
-            Image.file(imageFile, width: 240),
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                ElevatedButton.icon(
-                  icon: const Icon(Icons.check),
-                  label: const Text('Pakai Foto Ini'),
-                  onPressed: () {
-                    Navigator.of(context).pop(true);
-                  },
-                ),
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Ulangi'),
-                  onPressed: () {
-                    Navigator.of(context).pop(false);
-                  },
-                ),
-              ],
-            ),
-          ],
-        ),
       ),
     );
   }

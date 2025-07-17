@@ -8,6 +8,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'package:intl/intl.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
 class SavedPage extends StatefulWidget {
   const SavedPage({Key? key}) : super(key: key);
@@ -17,9 +18,12 @@ class SavedPage extends StatefulWidget {
 }
 
 class _SavedPageState extends State<SavedPage> {
+  late Future<void> _localeInitFuture;
+
   @override
   void initState() {
     super.initState();
+    _localeInitFuture = initializeDateFormatting('id', null);
     FlutterDownloader.initialize(debug: true, ignoreSsl: true);
   }
 
@@ -111,6 +115,21 @@ class _SavedPageState extends State<SavedPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Tunggu sampai inisialisasi locale selesai sebelum render
+    return FutureBuilder(
+      future: _localeInitFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        return _buildContent(context);
+      },
+    );
+  }
+
+  Widget _buildContent(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
 
     if (user == null) {
@@ -233,12 +252,12 @@ class _SavedPageState extends State<SavedPage> {
                                         expiredAt != null) ...[
                                       const SizedBox(height: 12),
                                       Text(
-                                        "Kamu menebus foto ini pada: ${DateFormat('d MMMM yyyy').format(redeemedAt)}",
+                                        "Kamu menebus foto ini pada: ${DateFormat('d MMMM yyyy', 'id').format(redeemedAt)}",
                                         style: const TextStyle(fontSize: 14),
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
-                                        "Kadaluarsa: ${DateFormat('d MMMM yyyy').format(expiredAt)}",
+                                        "Kadaluarsa: ${DateFormat('d MMMM yyyy', 'id').format(expiredAt)}",
                                         style: const TextStyle(
                                           fontSize: 14,
                                           color: Colors.redAccent,

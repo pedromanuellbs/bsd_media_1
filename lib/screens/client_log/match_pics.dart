@@ -1,21 +1,24 @@
 // screens/client_log/match_pics.dart
+import 'dart:ui';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-// --- TAMBAHAN: Import halaman payment.dart ---
 import './payment.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
+import 'package:http/http.dart' as http;
 
 class MatchPicsPage extends StatefulWidget {
   final List<Map<String, dynamic>> matchedPhotos;
-
-  // --- TAMBAHAN: MAP SESSION ID TO DETAIL (optional, bisa di-pass dari search.dart) ---
   final Map<String, dynamic>? sessionDetailsMap;
+  final bool isMember;
 
   const MatchPicsPage({
     Key? key,
     required this.matchedPhotos,
     this.sessionDetailsMap,
+    required this.isMember,
   }) : super(key: key);
 
   @override
@@ -27,7 +30,6 @@ class _MatchPicsPageState extends State<MatchPicsPage> {
   Map<String, dynamic>? _sessionDetails;
   bool _isLoadingDetails = false;
 
-  // === Tambahkan variabel berikut di sini (di dalam _MatchPicsPageState) ===
   bool _showReportCard = false;
   int? _selectedReason;
   final List<String> _reportReasons = [
@@ -55,7 +57,6 @@ class _MatchPicsPageState extends State<MatchPicsPage> {
   }
 
   Future<void> _fetchSessionDetails(String? sessionId) async {
-    // --- Cek mapping session dari widget, jika ada, langsung pakai (lebih cepat) ---
     if (sessionId != null &&
         widget.sessionDetailsMap != null &&
         widget.sessionDetailsMap!.containsKey(sessionId)) {
@@ -65,7 +66,6 @@ class _MatchPicsPageState extends State<MatchPicsPage> {
       });
       return;
     }
-    // --- Jika mapping tidak ada, fallback ke Firestore (cara lama) ---
     if (sessionId == null || sessionId.isEmpty) {
       setState(() => _isLoadingDetails = false);
       return;
@@ -165,33 +165,12 @@ class _MatchPicsPageState extends State<MatchPicsPage> {
                     onTap: () {
                       _showPhoto(photo);
                     },
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(8.0),
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          CachedNetworkImage(
-                            imageUrl: thumbUrl,
-                            fit: BoxFit.cover,
-                            placeholder:
-                                (context, url) => const Center(
-                                  child: CircularProgressIndicator(),
-                                ),
-                            errorWidget:
-                                (context, url, error) =>
-                                    const Icon(Icons.error),
-                          ),
-                          Center(
-                            child: Opacity(
-                              opacity: 0.5,
-                              child: Image.asset(
-                                'assets/logo-bsd-media.png',
-                                width: 120,
-                                fit: BoxFit.contain,
-                              ),
-                            ),
-                          ),
-                        ],
+                    child: AspectRatio(
+                      aspectRatio: 1.0,
+                      child: _faceBlurImageWidget(
+                        thumbUrl,
+                        aspect: 1.0,
+                        borderRadius: 8.0,
                       ),
                     ),
                   );
@@ -213,41 +192,15 @@ class _MatchPicsPageState extends State<MatchPicsPage> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Stack(
-                              alignment: Alignment.center,
-                              children: [
-                                CachedNetworkImage(
-                                  imageUrl:
-                                      _selectedPhoto!['webContentLink'] ??
-                                      _selectedPhoto!['thumbnailLink'] ??
-                                      '',
-                                  fit: BoxFit.fitWidth,
-                                  placeholder:
-                                      (context, url) => const Center(
-                                        child: CircularProgressIndicator(),
-                                      ),
-                                  errorWidget:
-                                      (context, url, error) => Container(
-                                        color: Colors.grey[200],
-                                        padding: const EdgeInsets.all(20),
-                                        child: const Center(
-                                          child: Text(
-                                            'Gagal memuat gambar',
-                                            textAlign: TextAlign.center,
-                                            style: TextStyle(color: Colors.red),
-                                          ),
-                                        ),
-                                      ),
-                                ),
-                                Opacity(
-                                  opacity: 0.5,
-                                  child: Image.asset(
-                                    'assets/logo-bsd-media.png',
-                                    width: 360,
-                                    fit: BoxFit.contain,
-                                  ),
-                                ),
-                              ],
+                            AspectRatio(
+                              aspectRatio: 1.0,
+                              child: _faceBlurImageWidget(
+                                _selectedPhoto!['webContentLink'] ??
+                                    _selectedPhoto!['thumbnailLink'] ??
+                                    '',
+                                aspect: 1.0,
+                                borderRadius: 12.0,
+                              ),
                             ),
                             _buildSessionDetails(),
                             Padding(
@@ -310,7 +263,6 @@ class _MatchPicsPageState extends State<MatchPicsPage> {
                                     ),
                                     child: const Text('Laporkan Foto ini'),
                                   ),
-                                  // Card report SUDAH DIPINDAH KE LUAR Card preview!
                                 ],
                               ),
                             ),
@@ -335,7 +287,6 @@ class _MatchPicsPageState extends State<MatchPicsPage> {
                       ),
                     ),
                   ),
-                  // Card report/modal DITAMPILKAN DI LUAR CARD PREVIEW
                   if (_showReportCard)
                     Container(
                       color: Colors.black54,
@@ -428,6 +379,58 @@ class _MatchPicsPageState extends State<MatchPicsPage> {
             ),
         ],
       ),
+    );
+  }
+
+  Widget _faceBlurImageWidget(
+    String imageUrl, {
+    double aspect = 1.0,
+    double borderRadius = 8.0,
+  }) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final w = constraints.maxWidth;
+        final h = constraints.maxHeight;
+
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(borderRadius),
+          child: Stack(
+            children: [
+              CachedNetworkImage(
+                imageUrl: imageUrl,
+                fit: BoxFit.cover,
+                width: w,
+                height: h,
+              ),
+              if (!widget.isMember)
+                Positioned.fill(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(borderRadius),
+                    child: ImageFiltered(
+                      imageFilter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                      child: CachedNetworkImage(
+                        imageUrl: imageUrl,
+                        fit: BoxFit.cover,
+                        width: w,
+                        height: h,
+                      ),
+                    ),
+                  ),
+                ),
+              Center(
+                child: Opacity(
+                  opacity: 0.5,
+                  child: Image.asset(
+                    'assets/logo-bsd-media.png',
+                    width: w * 0.6,
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 

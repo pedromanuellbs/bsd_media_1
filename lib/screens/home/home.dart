@@ -1,7 +1,7 @@
 // screens/home/home.dart
 import 'dart:convert';
 import 'dart:async';
-import 'dart:io'; // UBAHAN: Diperlukan untuk handle hasil foto
+import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:salomon_bottom_bar/salomon_bottom_bar.dart';
@@ -9,16 +9,15 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:camera/camera.dart'; // UBAHAN: Import package camera
+import 'package:camera/camera.dart';
 
-// import 'package:../bsd_media/search.dart';
-import 'search.dart'; // langsung, tanpa ../
+import 'search.dart';
 import '../fg_log/create_fg.dart';
 import '../fg_log/history_fg.dart';
 import 'profile_page.dart';
 import 'saved.dart';
 import 'settings.dart';
-import '../../face_ai/face_capture_page.dart'; // UBAHAN: Import halaman face capture
+import '../../face_ai/face_capture_page.dart';
 import '../fg_log/history_pay.dart';
 
 // Data class untuk sesi foto
@@ -38,7 +37,9 @@ class _PhotoSessionFeedData {
 }
 
 class HomePage extends StatefulWidget {
-  const HomePage({Key? key}) : super(key: key);
+  final bool isMember;
+  const HomePage({Key? key, required this.isMember}) : super(key: key);
+
   @override
   _HomePageState createState() => _HomePageState();
 }
@@ -52,9 +53,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   bool _isLoading = true;
   List<_PhotoSessionFeedData> _feeds = [];
   String? photoUrl;
-  // bool _isPhotographer = false;
 
-  // API Key Google Drive (samakan dengan collage_page.dart)
   static const _apiKey = 'AIzaSyC_vPd6yPwYQ60Pn-tuR3Nly_7mgXZcxGk';
 
   @override
@@ -104,10 +103,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       final date = data['date'] as String? ?? '';
       final sessionTitle = data['title'] as String? ?? '';
       if (driveLink.isEmpty || photographerId.isEmpty) {
-        continue; // skip sesi tanpa link atau photographer
+        continue;
       }
 
-      // Ambil username fotografer dari koleksi users
       String photographerUsername = 'Fotografer';
       if (photographerId.isNotEmpty) {
         final userDoc =
@@ -118,7 +116,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         photographerUsername = userDoc.data()?['username'] ?? 'Fotografer';
       }
 
-      // Ambil max 5 foto dari Google Drive (pakai thumbnailLink)
       List<String> photoUrls = [];
       try {
         if (driveLink.isNotEmpty) {
@@ -146,7 +143,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     });
   }
 
-  // Ambil thumbnailLink gambar dari Google Drive
   Future<List<String>> _fetchImageUrls(String folderUrl) async {
     final match =
         RegExp(r'/d/([^/]+)').firstMatch(folderUrl) ??
@@ -170,7 +166,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     }
     final data = json.decode(resp.body) as Map<String, dynamic>;
     final files = (data['files'] as List).cast<Map<String, dynamic>>();
-    // Pakai thumbnailLink jika ada, fallback ke direct link jika tidak
     return files.map<String>((f) {
       if (f['thumbnailLink'] != null) {
         return f['thumbnailLink'] as String;
@@ -179,34 +174,30 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     }).toList();
   }
 
-  // UBAHAN: Fungsi untuk navigasi ke halaman face capture
   Future<void> _navigateToFaceCapture() async {
     try {
-      // 1. Ambil daftar kamera yang tersedia
       final cameras = await availableCameras();
-      // 2. Pilih kamera depan jika ada, jika tidak, gunakan kamera pertama
       final frontCamera = cameras.firstWhere(
         (camera) => camera.lensDirection == CameraLensDirection.front,
         orElse: () => cameras.first,
       );
 
-      // 3. Navigasi ke FaceCapturePage dan tunggu hasilnya (File foto)
       final result = await Navigator.push<File>(
         context,
         MaterialPageRoute(
-          // UBAHAN: Tambahkan parameter isClient
           builder:
-              (_) => FaceCapturePage(camera: frontCamera, isClient: _isClient),
+              (_) => FaceCapturePage(
+                camera: frontCamera,
+                isClient: _isClient,
+                isMember: widget.isMember,
+              ),
         ),
       );
 
-      // 4. (Opsional) Lakukan sesuatu dengan foto yang dikembalikan
       if (result != null) {
-        // ignore: use_build_context_synchronously
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Foto berhasil diambil: ${result.path}')),
         );
-        // Di sini Anda bisa melanjutkan logika untuk mencari foto berdasarkan wajah
       }
     } catch (e) {
       debugPrint('Error navigasi ke face capture: $e');
@@ -231,7 +222,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           isHome
               ? _buildHomeAppBar()
               : AppBar(title: Text(_navTitle(_selectedIndex))),
-      body: _buildPageBody(_selectedIndex), // Ganti dengan fungsi baru
+      body: _buildPageBody(_selectedIndex),
       bottomNavigationBar: SalomonBottomBar(
         currentIndex: _selectedIndex,
         selectedItemColor: const Color(0xff6200ee),
@@ -247,17 +238,14 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     );
   }
 
-  // FUNGSI INI TARUH DI SINI
   Widget _buildPageBody(int idx) {
-    // Jika fotografer dan tab pertama, tampilkan HistoryPayPage
     if (_isPhotographer && idx == 0) {
-      return const HistoryPayPage(); // Import dulu history_pay.dart
+      return const HistoryPayPage();
     }
-    // Jika klien dan tab pertama, tampilkan feed
     if (_isClient && idx == 0) {
-      return _buildPhotoSessionFeed();
+      // Kirim status member ke dalam feed
+      return _buildPhotoSessionFeed(isMember: widget.isMember);
     }
-    // Selain itu, fallback ke _buildPlaceholder
     return _buildPlaceholder(idx);
   }
 
@@ -320,7 +308,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     ),
   );
 
-  // UBAHAN: Widget ikon dibuat non-const dan ditambahkan GestureDetector
   Widget _buildActionIcons() => Column(
     mainAxisSize: MainAxisSize.min,
     children: [
@@ -331,9 +318,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         style: TextStyle(color: Colors.white70, fontSize: 12),
       ),
       const SizedBox(height: 16),
-      // Tambahkan GestureDetector untuk membuat ikon bisa ditekan
       GestureDetector(
-        onTap: _navigateToFaceCapture, // Panggil fungsi navigasi di sini
+        onTap: _navigateToFaceCapture,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: const [
@@ -365,7 +351,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   }
 
   List<SalomonBottomBarItem> _navItems() {
-    // 1. Create a local variable to help Dart's null safety analysis
     final localPhotoUrl = photoUrl;
 
     return [
@@ -398,16 +383,13 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         title: Text(_isPhotographer ? "Create" : "Search"),
         selectedColor: _isPhotographer ? Colors.green : Colors.orange,
       ),
-
-      // vvv----- MODIFIED ITEM HERE -----vvv
       SalomonBottomBarItem(
-        // 2. Use the local variable for the check and the widget
         icon:
             (localPhotoUrl != null && localPhotoUrl.isNotEmpty)
                 ? ClipRRect(
                   borderRadius: BorderRadius.circular(6.0),
                   child: Image.network(
-                    localPhotoUrl, // No "!" needed, the error is gone
+                    localPhotoUrl,
                     width: 28,
                     height: 28,
                     fit: BoxFit.cover,
@@ -417,8 +399,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         title: Text(_isPhotographer ? "Fotografer" : "Profile"),
         selectedColor: Colors.teal,
       ),
-
-      // ^^^----- END OF MODIFIED ITEM -----^^^
       SalomonBottomBarItem(
         icon: const Icon(Icons.settings),
         title: const Text("Settings"),
@@ -436,7 +416,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   );
 
   // Feed untuk klien: daftar sesi foto dengan slideshow animasi black fade
-  Widget _buildPhotoSessionFeed() {
+  Widget _buildPhotoSessionFeed({required bool isMember}) {
     if (_isLoading) return const Center(child: CircularProgressIndicator());
     if (_feeds.isEmpty) {
       return const Center(child: Text('Belum ada sesi foto dari fotografer.'));
@@ -447,12 +427,12 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       itemCount: _feeds.length,
       itemBuilder: (context, idx) {
         final feed = _feeds[idx];
-        return PhotoSessionSlide(feed: feed);
+        // isMember dikirim ke PhotoSessionSlide
+        return PhotoSessionSlide(feed: feed, isMember: isMember);
       },
     );
   }
 
-  // Placeholder jika bukan klien
   Widget _buildPlaceholder(int idx) {
     switch (idx) {
       case 1:
@@ -467,7 +447,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         if (_isPhotographer) {
           return const CreateFGForm();
         } else if (_isClient) {
-          return const PhotographerSearchPage();
+          return PhotographerSearchPage(isMember: widget.isMember);
         } else {
           return const SizedBox.shrink();
         }
@@ -492,7 +472,12 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 // Widget slideshow animasi black fade per sesi foto
 class PhotoSessionSlide extends StatefulWidget {
   final _PhotoSessionFeedData feed;
-  const PhotoSessionSlide({Key? key, required this.feed}) : super(key: key);
+  final bool isMember;
+  const PhotoSessionSlide({
+    Key? key,
+    required this.feed,
+    required this.isMember,
+  }) : super(key: key);
 
   @override
   State<PhotoSessionSlide> createState() => _PhotoSessionSlideState();
@@ -516,7 +501,9 @@ class _PhotoSessionSlideState extends State<PhotoSessionSlide>
     );
     _fadeAnim = Tween(begin: 1.0, end: 0.0).animate(_controller);
     _startSlideshow();
-    _loadWatermark();
+    if (!widget.isMember) {
+      _loadWatermark();
+    }
   }
 
   void _startSlideshow() {
@@ -530,7 +517,6 @@ class _PhotoSessionSlideState extends State<PhotoSessionSlide>
     });
   }
 
-  // Memuat watermark logo BSD Media sebagai ui.Image (untuk CustomPaint)
   void _loadWatermark() async {
     final provider = AssetImage('assets/logo-bsd-media.png');
     _watermarkStream = provider.resolve(const ImageConfiguration());
@@ -556,23 +542,17 @@ class _PhotoSessionSlideState extends State<PhotoSessionSlide>
     final url = widget.feed.photoUrls[_currentIdx];
     final photographerName = widget.feed.photographerUsername;
     final uploadDate = widget.feed.photoSessionDate;
-    // Ambil role klien dari HomePage di atas
-    final _homeState = context.findAncestorStateOfType<_HomePageState>();
-    final isClient = _homeState?._isClient ?? false;
 
     return Stack(
       fit: StackFit.expand,
       children: [
-        Container(color: Colors.black), // Background black
+        Container(color: Colors.black),
         FadeTransition(
           opacity: _fadeAnim,
           child:
-              isClient
-                  ? WatermarkedImage(
-                    imageUrl: url,
-                    watermarkImage: _watermarkImage,
-                  )
-                  : CachedNetworkImage(
+              (widget.isMember)
+                  // Jika member, tampilkan gambar tanpa watermark
+                  ? CachedNetworkImage(
                     imageUrl: url,
                     fit: BoxFit.cover,
                     placeholder:
@@ -588,6 +568,11 @@ class _PhotoSessionSlideState extends State<PhotoSessionSlide>
                         ),
                       );
                     },
+                  )
+                  // Jika non-member, tampilkan gambar dengan watermark
+                  : WatermarkedImage(
+                    imageUrl: url,
+                    watermarkImage: _watermarkImage,
                   ),
         ),
         Positioned(
@@ -634,7 +619,6 @@ class _PhotoSessionSlideState extends State<PhotoSessionSlide>
   }
 }
 
-// Widget untuk melapisi network image dengan watermark di tengah (besar, transparan)
 class WatermarkedImage extends StatelessWidget {
   final String imageUrl;
   final ui.Image? watermarkImage;
@@ -652,7 +636,6 @@ class WatermarkedImage extends StatelessWidget {
         return Stack(
           fit: StackFit.expand,
           children: [
-            // Base image (Google Drive)
             CachedNetworkImage(
               imageUrl: imageUrl,
               fit: BoxFit.cover,
@@ -666,7 +649,6 @@ class WatermarkedImage extends StatelessWidget {
                 );
               },
             ),
-            // Watermark overlay (center, besar, transparan 65%)
             if (watermarkImage != null)
               IgnorePointer(
                 child: CustomPaint(
@@ -695,7 +677,6 @@ class WatermarkPainter extends CustomPainter {
           ..filterQuality = FilterQuality.high
           ..isAntiAlias = true;
 
-    // Ukuran watermark: sekitar 45% lebar layar (besar, center)
     final double watermarkWidth = size.width * 0.85;
     final double scale = watermarkWidth / watermark.width;
     final double watermarkHeight = watermark.height * scale;

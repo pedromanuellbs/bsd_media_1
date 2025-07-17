@@ -4,9 +4,17 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:camera/camera.dart';
 import '../../face_ai/face_capture_page.dart';
+import 'package:intl/intl.dart';
+import 'package:intl/date_symbol_data_local.dart';
+import 'search.dart';
 
 class PhotographerSearchPage extends StatefulWidget {
-  const PhotographerSearchPage({Key? key}) : super(key: key);
+  final bool isMember; // <-- TAMBAHKAN INI
+
+  const PhotographerSearchPage({
+    Key? key,
+    required this.isMember, // <-- TAMBAHKAN INI
+  }) : super(key: key);
 
   @override
   State<PhotographerSearchPage> createState() => _PhotographerSearchPageState();
@@ -18,13 +26,11 @@ class _PhotographerSearchPageState extends State<PhotographerSearchPage> {
   List<String> _uids = [];
   bool _loading = false;
   bool? _isClient;
-  String? _username;
 
   @override
   void initState() {
     super.initState();
     _checkUserRole();
-    _fetchUsername();
   }
 
   Future<void> _checkUserRole() async {
@@ -41,22 +47,6 @@ class _PhotographerSearchPageState extends State<PhotographerSearchPage> {
     setState(() {
       _isClient = (snap.data()?['role'] == 'client');
     });
-  }
-
-  // Ambil username dari Firestore
-  Future<void> _fetchUsername() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-    final doc =
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .get();
-    if (doc.exists) {
-      setState(() {
-        _username = doc.data()?['username'] ?? '';
-      });
-    }
   }
 
   Future<void> _searchPhotographer(String keyword) async {
@@ -110,6 +100,7 @@ class _PhotographerSearchPageState extends State<PhotographerSearchPage> {
     }
 
     return Scaffold(
+      // appBar: AppBar(title: const Text('Cari Fotografer')),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -157,7 +148,9 @@ class _PhotographerSearchPageState extends State<PhotographerSearchPage> {
                                         (_) => PhotographerProfilePage(
                                           photographerData: data,
                                           photographerUid: uid,
-                                          username: _username ?? '',
+                                          isMember:
+                                              widget
+                                                  .isMember, // <-- TAMBAHKAN INI
                                         ),
                                   ),
                                 );
@@ -176,13 +169,13 @@ class _PhotographerSearchPageState extends State<PhotographerSearchPage> {
 class PhotographerProfilePage extends StatelessWidget {
   final Map<String, dynamic> photographerData;
   final String photographerUid;
-  final String username;
+  final bool isMember; // <-- TAMBAHKAN INI
 
   const PhotographerProfilePage({
     Key? key,
     required this.photographerData,
     required this.photographerUid,
-    required this.username,
+    required this.isMember, // <-- TAMBAHKAN INI
   }) : super(key: key);
 
   Future<void> _showSearchDialog(
@@ -190,6 +183,7 @@ class PhotographerProfilePage extends StatelessWidget {
     List<QueryDocumentSnapshot> sessionDocs,
     List<String> driveLinks,
   ) async {
+    // Buat mapping sessionId ke detail sesi
     final Map<String, dynamic> sessionDetailsMap = {
       for (var doc in sessionDocs) doc.id: doc.data(),
     };
@@ -235,7 +229,8 @@ class PhotographerProfilePage extends StatelessWidget {
                                     (_) => FaceCapturePage(
                                       camera: frontCamera,
                                       isClient: true,
-                                      // username: username,
+                                      isMember:
+                                          isMember, // <-- PAKAI isMember DARI KONSTRUKTOR
                                       driveLinks: driveLinks,
                                       sessionDetailsMap: sessionDetailsMap,
                                     ),

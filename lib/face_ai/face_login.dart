@@ -64,6 +64,10 @@ class _FaceLoginPageState extends State<FaceLoginPage> {
     setState(() => _isLoading = true);
 
     try {
+      print(
+        'DEBUG: Username dikirim ke backend: ${widget.username}',
+      ); // <<=== TARUH DI SINI
+
       final uri = Uri.parse(
         'https://backendlbphbsdmedia-production.up.railway.app/face_login',
       );

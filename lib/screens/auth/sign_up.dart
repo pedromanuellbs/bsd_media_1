@@ -547,6 +547,7 @@ class _SignUpPageState extends State<SignUpPage> {
                                     (_) => FaceCapturePage(
                                       camera: cams.first,
                                       isClient: false,
+                                      isMember: false,
                                     ),
                               ),
                             );
