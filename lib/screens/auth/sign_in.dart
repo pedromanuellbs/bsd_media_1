@@ -232,7 +232,7 @@ class _SignInPageState extends State<SignInPage> {
       ]);
       print('[AUTH] Account unlocked and attempts reset');
 
-      _showSuccess('Link reset telah dikirim. Akun telah dibuka kembali.');
+      _showSuccess('Link reset telah dikirim. Silahkan periksa email Anda.');
     } catch (e) {
       print('[AUTH ERROR] Password reset failed: $e');
       _showError(e.toString());

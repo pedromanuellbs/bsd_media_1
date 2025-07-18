@@ -305,7 +305,7 @@ class _FaceBlurredImageState extends State<FaceBlurredImage> {
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(rect.width / 4),
                       child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                        filter: ImageFilter.blur(sigmaX: 100, sigmaY: 100),
                         child: Container(color: Colors.transparent),
                       ),
                     ),

@@ -356,7 +356,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     return [
       if (_isPhotographer)
         SalomonBottomBarItem(
-          icon: const Icon(Icons.history),
+          icon: const Icon(Icons.money_off_csred_rounded),
           title: const Text("History Pembelian"),
           selectedColor: Colors.purple,
         )
