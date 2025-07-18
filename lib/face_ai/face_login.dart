@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:http/http.dart' as http;
 import 'dart:io';
-import 'dart:convert'; // <--- TAMBAHKAN BARIS INI
+import 'dart:convert'; // <--- TAMBAHKAN BARIS
+import 'package:firebase_auth/firebase_auth.dart';
 
 class FaceLoginPage extends StatefulWidget {
   final CameraDescription camera;
@@ -64,17 +65,17 @@ class _FaceLoginPageState extends State<FaceLoginPage> {
     setState(() => _isLoading = true);
 
     try {
-      print(
-        'DEBUG: Username dikirim ke backend: ${widget.username}',
-      ); // <<=== TARUH DI SINI
+      // Ambil UID dari Firebase Auth sebelum upload
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      print('DEBUG: UID dikirim ke backend: $uid');
 
       final uri = Uri.parse(
         'https://backendlbphbsdmedia-production.up.railway.app/face_login',
       );
       var request = http.MultipartRequest('POST', uri);
-      // 'username' di sini berisi UID dari Firebase, sesuai kiriman dari sign_in.dart
-      request.fields['username'] =
-          widget.username; // isikan 'dummy9' atau yang diinput user
+
+      // Kirim field 'uid' ke backend, pastikan UID bukan username/email
+      request.fields['uid'] = uid ?? '';
       request.files.add(
         await http.MultipartFile.fromPath('image', _capturedFile!.path),
       );
@@ -82,25 +83,21 @@ class _FaceLoginPageState extends State<FaceLoginPage> {
       final response = await request.send();
       final responseBody = await response.stream.bytesToString();
 
-      // Pengecekan status code 200 untuk sukses
       if (response.statusCode == 200) {
-        // Jika sukses, kembali ke halaman sign_in dengan nilai 'true'
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Verifikasi Wajah Berhasil!')),
           );
-          Navigator.pop(context, true); // <--- PENTING
+          Navigator.pop(context, true);
         }
       } else {
-        // Jika gagal, tampilkan pesan error dan kembali dengan nilai 'false'
         if (mounted) {
-          // Ambil pesan error dari JSON jika ada
           final errorMsg =
               json.decode(responseBody)['error'] ?? 'Verifikasi wajah gagal';
           ScaffoldMessenger.of(
             context,
           ).showSnackBar(SnackBar(content: Text('Gagal: $errorMsg')));
-          Navigator.pop(context, false); // <--- PENTING
+          Navigator.pop(context, false);
         }
       }
     } catch (e) {
@@ -108,7 +105,7 @@ class _FaceLoginPageState extends State<FaceLoginPage> {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Terjadi error: $e')));
-        Navigator.pop(context, false); // <--- PENTING
+        Navigator.pop(context, false);
       }
     } finally {
       if (mounted) {
