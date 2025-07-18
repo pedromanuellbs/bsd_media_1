@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../fg_log/history_fg.dart';
 
 class CreateFGForm extends StatefulWidget {
   const CreateFGForm({Key? key}) : super(key: key);
@@ -11,12 +12,12 @@ class CreateFGForm extends StatefulWidget {
 }
 
 class _CreateFGFormState extends State<CreateFGForm> {
-  final _formKey       = GlobalKey<FormState>();
-  final _titleCtrl     = TextEditingController();
-  final _dateCtrl      = TextEditingController();
-  final _locationCtrl  = TextEditingController();
-  final _linkCtrl      = TextEditingController();
-  bool  _loading       = false;
+  final _formKey = GlobalKey<FormState>();
+  final _titleCtrl = TextEditingController();
+  final _dateCtrl = TextEditingController();
+  final _locationCtrl = TextEditingController();
+  final _linkCtrl = TextEditingController();
+  bool _loading = false;
 
   @override
   void dispose() {
@@ -36,7 +37,7 @@ class _CreateFGFormState extends State<CreateFGForm> {
     );
     if (picked != null) {
       _dateCtrl.text =
-        '${picked.year}-${picked.month.toString().padLeft(2,'0')}-${picked.day.toString().padLeft(2,'0')}';
+          '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
     }
   }
 
@@ -49,22 +50,32 @@ class _CreateFGFormState extends State<CreateFGForm> {
       if (uid == null) throw 'User belum login';
 
       await FirebaseFirestore.instance.collection('photo_sessions').add({
-        'title'         : _titleCtrl.text.trim(),   // <— pastikan pakai 'title'
-        'date'          : _dateCtrl.text,
-        'location'      : _locationCtrl.text.trim(),
-        'driveLink'     : _linkCtrl.text.trim(),
+        'title': _titleCtrl.text.trim(),
+        'date': _dateCtrl.text,
+        'location': _locationCtrl.text.trim(),
+        'driveLink': _linkCtrl.text.trim(),
         'photographerId': uid,
-        'createdAt'     : FieldValue.serverTimestamp(),
+        'createdAt': FieldValue.serverTimestamp(),
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Sesi foto berhasil disimpan')),
+      showDialog(
+        context: context,
+        builder:
+            (_) => AlertDialog(
+              title: const Text('Sukses'),
+              content: const Text('Sesi sudah dibuat'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
       );
-      Navigator.of(context).pop();
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: $e')));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -90,10 +101,12 @@ class _CreateFGFormState extends State<CreateFGForm> {
                 decoration: InputDecoration(
                   labelText: 'Nama Kegiatan',
                   prefixIcon: const Icon(Icons.title),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
-                validator: (v) =>
-                    v == null || v.isEmpty ? 'Isi nama kegiatan' : null,
+                validator:
+                    (v) => v == null || v.isEmpty ? 'Isi nama kegiatan' : null,
               ),
               const SizedBox(height: 16),
 
@@ -104,11 +117,13 @@ class _CreateFGFormState extends State<CreateFGForm> {
                 decoration: InputDecoration(
                   labelText: 'Tanggal Sesi Foto',
                   prefixIcon: const Icon(Icons.calendar_today),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
                 onTap: _pickDate,
-                validator: (v) =>
-                    v == null || v.isEmpty ? 'Pilih tanggal' : null,
+                validator:
+                    (v) => v == null || v.isEmpty ? 'Pilih tanggal' : null,
               ),
               const SizedBox(height: 16),
 
@@ -118,10 +133,11 @@ class _CreateFGFormState extends State<CreateFGForm> {
                 decoration: InputDecoration(
                   labelText: 'Lokasi',
                   prefixIcon: const Icon(Icons.location_on),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
-                validator: (v) =>
-                    v == null || v.isEmpty ? 'Isi lokasi' : null,
+                validator: (v) => v == null || v.isEmpty ? 'Isi lokasi' : null,
               ),
               const SizedBox(height: 16),
 
@@ -131,7 +147,9 @@ class _CreateFGFormState extends State<CreateFGForm> {
                 decoration: InputDecoration(
                   labelText: 'Link Google Drive',
                   prefixIcon: const Icon(Icons.link),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
                 validator: (v) {
                   if (v == null || v.isEmpty) return 'Isi link Drive';
@@ -150,11 +168,14 @@ class _CreateFGFormState extends State<CreateFGForm> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.deepPurple,
                   minimumSize: const Size.fromHeight(48),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
-                child: _loading
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text('Simpan Sesi Foto'),
+                child:
+                    _loading
+                        ? const CircularProgressIndicator(color: Colors.white)
+                        : const Text('Simpan Sesi Foto'),
               ),
             ],
           ),

@@ -36,7 +36,6 @@ class _SignInPageState extends State<SignInPage> {
     super.dispose();
   }
 
-  // --- FUNGSI YANG DIPERBAIKI ---
   Future<void> _signIn() async {
     if (_loading) return;
     setState(() => _loading = true);
@@ -63,11 +62,21 @@ class _SignInPageState extends State<SignInPage> {
       }
 
       final userDoc = userQuery.docs.first;
-      final isMember =
-          userDoc['member_status'] ==
-          'member'; // <--- AMBIL STATUS MEMBER DI SINI
-      final email = userDoc['email'] as String;
-      final role = userDoc['role'] as String;
+      final data = userDoc.data() as Map<String, dynamic>;
+      final role = data['role'] as String;
+
+      // ---- PERBAIKAN DI SINI ----
+      bool isMember = false;
+      if (role == 'client') {
+        final status =
+            data.containsKey('member_status')
+                ? data['member_status']
+                : 'non_member';
+        isMember = status == 'member';
+      }
+      // ---- END PERBAIKAN ----
+
+      final email = data['email'] as String;
       print('[DEBUG] Found user: $email | Role: $role | isMember: $isMember');
 
       final locked = await _lockedAccountsRef.doc(email).get();
@@ -76,9 +85,7 @@ class _SignInPageState extends State<SignInPage> {
       if (!_isPhotographer && _idMemberCtrl.text.trim().isNotEmpty) {
         final String inputCode = _idMemberCtrl.text.trim();
         final String? dbMemberCode =
-            userDoc.data().containsKey('member_code')
-                ? userDoc['member_code']
-                : null;
+            data.containsKey('member_code') ? data['member_code'] : null;
         if (dbMemberCode != null && dbMemberCode != inputCode) {
           throw 'ID Member BSD MEDIA salah.';
         }
@@ -93,14 +100,12 @@ class _SignInPageState extends State<SignInPage> {
       );
       print('[DEBUG] Login success! UID: ${cred.user?.uid}');
 
-      // --- PERBAIKAN DIMULAI DI SINI ---
       final uid = cred.user?.uid;
 
       if (uid == null || uid.isEmpty) {
         throw 'Gagal mendapatkan data user setelah login. Coba lagi.';
       }
       print('[DEBUG] Firebase UID user login: $uid');
-      // --- PERBAIKAN SELESAI DI SINI ---
 
       await _attemptsRef.doc(username).delete();
 
@@ -111,7 +116,6 @@ class _SignInPageState extends State<SignInPage> {
           orElse: () => cameras.first,
         );
 
-        // 2. Sekarang kita yakin 'uid' tidak kosong saat dikirim
         final bool? faceVerified = await Navigator.push<bool>(
           context,
           MaterialPageRoute(
@@ -127,12 +131,7 @@ class _SignInPageState extends State<SignInPage> {
         if (faceVerified == true) {
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(
-              builder:
-                  (_) => HomePage(
-                    isMember: isMember,
-                  ), // <--- KIRIM STATUS MEMBER KE HOMEPAGE
-            ),
+            MaterialPageRoute(builder: (_) => HomePage(isMember: isMember)),
           );
         } else {
           await FirebaseAuth.instance.signOut();
@@ -144,10 +143,7 @@ class _SignInPageState extends State<SignInPage> {
 
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(
-          builder:
-              (_) => HomePage(isMember: isMember), // <--- PASTIKAN DI SINI JUGA
-        ),
+        MaterialPageRoute(builder: (_) => HomePage(isMember: isMember)),
       );
     } on FirebaseAuthException catch (e) {
       print('[ERROR] Auth failed: ${e.code}');

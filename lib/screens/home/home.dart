@@ -220,7 +220,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       extendBodyBehindAppBar: isHome,
       appBar:
           isHome
-              ? _buildHomeAppBar()
+              ? (_isClient ? _buildHomeAppBar() : null)
               : AppBar(title: Text(_navTitle(_selectedIndex))),
       body: _buildPageBody(_selectedIndex),
       bottomNavigationBar: SalomonBottomBar(
